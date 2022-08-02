@@ -35,19 +35,14 @@ def UpdateLoggingPath(defaultlogfolder=None):
     global loggingpath
     if 'SPLUNK_HOME' in os.environ:
         loggingpath = os.path.join(os.environ['SPLUNK_HOME'], 'var', 'log', 'splunk', 'bitglass.log')
-    # Can't use PHANTOM_LOG_DIR (not defined), /opt/phantom/var/log/phantom/apps is missing on the OVA too
-    # (the latter uses /opt/phantom...) and would have to create bitglass/ directory in either anyways..
-    # TODO Should probably read 'appid' from bitglass.json
     elif os.path.isdir(os.path.join(os.sep, 'opt', 'phantom', 'local_data', 'app_states', '8119e222-818e-42f5-a210-1c7c9d337e81', '')):
         loggingpath = os.path.join(os.sep, 'opt', 'phantom', 'local_data', 'app_states', '8119e222-818e-42f5-a210-1c7c9d337e81', 'bitglass.log')
-    # Deployed LSS instance
     elif os.path.isdir(os.path.join(os.sep, 'var', 'log', 'bitglass', '')):
         loggingpath = os.path.join(os.sep, 'var', 'log', 'bitglass', 'app.log')
+    elif defaultlogfolder:
+        loggingpath = os.path.join(defaultlogfolder, 'log', 'app.log')
     else:
-        if defaultlogfolder:
-            loggingpath = os.path.join(defaultlogfolder, 'log', 'app.log')
-        else:
-            loggingpath = os.path.join(datapath, 'app.log')
+        loggingpath = os.path.join(datapath, 'app.log')
 
 
 loggingpath = UpdateLoggingPath()

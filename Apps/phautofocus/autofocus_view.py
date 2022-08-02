@@ -7,16 +7,13 @@ import ast
 
 def get_search_string(query_dict, indent=0):
 
-    query_str = ''
-
-    for x in range(indent):
-        query_str += "&nbsp;&nbsp;&nbsp;"
+    query_str = ''.join("&nbsp;&nbsp;&nbsp;" for _ in range(indent))
 
     if len(query_dict['children']) > 1:
         query_str += "Match {0} of the following conditions:<br>".format(query_dict['operator'])
         for child in query_dict['children']:
             if ('children' not in child):
-                for x in range(indent):
+                for _ in range(indent):
                     query_str += "&nbsp;&nbsp;&nbsp;"
                 query_str += "&nbsp;&nbsp&nbsp;<b>{0}</b> <i>{1}</i> {2}<br>".format(child['field'], child['operator'], child['value'])
             else:
@@ -36,8 +33,7 @@ def get_search_string(query_dict, indent=0):
 
 
 def get_ctx_result(result):
-    ctx_result = {}
-    ctx_result['summary'] = result.get_summary()
+    ctx_result = {'summary': result.get_summary()}
     ctx_result['param'] = result.get_param()
     ctx_result['status'] = result.get_status()
 
@@ -72,10 +68,8 @@ def get_report(provides, all_app_runs, context):
     context['results'] = results = []
     for summary, action_results in all_app_runs:
         for result in action_results:
-            ctx_result = get_ctx_result(result)
-            if (not ctx_result):
-                continue
-            results.append(ctx_result)
+            if ctx_result := get_ctx_result(result):
+                results.append(ctx_result)
     # print context
     return 'af_get_report.html'
 

@@ -15,5 +15,5 @@ ARBORSIGHTLINE_ALERTS_DATA_KEY_UNAVAILABLE_MSG = 'The key "data" is unavailable 
 ARBORSIGHTLINE_CREATE_ARTIFACT_FAILED_MSG = 'Artifact creation failed: {msg}'
 
 ARBORSIGHTLINE_API_URL = '/api/sp/'
-ARBORSIGHTLINE_GET_ALERTS_ENDPOINT = ARBORSIGHTLINE_API_URL + 'alerts/'
+ARBORSIGHTLINE_GET_ALERTS_ENDPOINT = f'{ARBORSIGHTLINE_API_URL}alerts/'
 ARBORSIGHTLINE_GET_ALERTS_FILTER = '/data/attributes/alert_type = dos_host_detection AND /data/attributes/start_time > {time}'

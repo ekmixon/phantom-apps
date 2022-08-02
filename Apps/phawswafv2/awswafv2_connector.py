@@ -65,19 +65,16 @@ class AwsWafConnector(BaseConnector):
             return new_dict
 
         if isinstance(cur_obj, list):
-            new_list = []
-            for v in cur_obj:
-                new_list.append(self._sanitize_data(v))
-            return new_list
+            return [self._sanitize_data(v) for v in cur_obj]
 
         if isinstance(cur_obj, datetime):
             return cur_obj.strftime("%Y-%m-%d %H:%M:%S")
 
         if isinstance(cur_obj, bp.PageIterator):
-            new_dict = dict()
+            new_dict = {}
             try:
                 for page in cur_obj:
-                    new_dict.update(page)
+                    new_dict |= page
                 return new_dict
             except Exception as e:
                 return {'error': e}
@@ -101,12 +98,9 @@ class AwsWafConnector(BaseConnector):
 
     def _create_client(self, action_result, param=None):
 
-        boto_config = None
-        if self._proxy:
-            boto_config = Config(proxies=self._proxy)
-
+        boto_config = Config(proxies=self._proxy) if self._proxy else None
         # Try getting and using temporary assume role credentials from parameters
-        temp_credentials = dict()
+        temp_credentials = {}
         if param and 'credentials' in param:
             try:
                 temp_credentials = ast.literal_eval(param['credentials'])
@@ -230,18 +224,25 @@ class AwsWafConnector(BaseConnector):
         method_name = action_identifier_map.get(action_identifier)[0]
         set_name = action_identifier_map.get(action_identifier)[1]
 
-        resp_json = dict()
-        set_list = list()
+        resp_json = {}
+        set_list = []
 
         while True:
-            if not resp_json.get('NextMarker'):
-                ret_val, resp_json = self._make_boto_call(action_result, method_name, Limit=AWSWAF_DEFAULT_LIMIT)
-            else:
-                ret_val, resp_json = self._make_boto_call(action_result, method_name, Limit=AWSWAF_DEFAULT_LIMIT,
-                                                          NextMarker=resp_json.get('NextMarker'))
+            ret_val, resp_json = (
+                self._make_boto_call(
+                    action_result,
+                    method_name,
+                    Limit=AWSWAF_DEFAULT_LIMIT,
+                    NextMarker=resp_json.get('NextMarker'),
+                )
+                if resp_json.get('NextMarker')
+                else self._make_boto_call(
+                    action_result, method_name, Limit=AWSWAF_DEFAULT_LIMIT
+                )
+            )
 
             if phantom.is_fail(ret_val) or resp_json is None:
-                self.save_progress("Error while getting the {}".format(set_name))
+                self.save_progress(f"Error while getting the {set_name}")
                 return None
 
             if limit and limit <= AWSWAF_DEFAULT_LIMIT:
@@ -433,7 +434,7 @@ class AwsWafConnector(BaseConnector):
         action = self.get_action_identifier()
         action_execution_status = phantom.APP_SUCCESS
 
-        if action in action_mapping.keys():
+        if action in action_mapping:
             action_function = action_mapping[action]
             action_execution_status = action_function(param)
 
@@ -442,8 +443,7 @@ class AwsWafConnector(BaseConnector):
     def _handle_get_ec2_role(self):
 
         session = Session(region_name=self._region)
-        credentials = session.get_credentials()
-        return credentials
+        return session.get_credentials()
 
     def initialize(self):
 
@@ -515,26 +515,24 @@ if __name__ == '__main__':
         password = getpass.getpass("Password: ")
 
     if (username and password):
-        login_url = BaseConnector._get_phantom_base_url() + "login"
+        login_url = f"{BaseConnector._get_phantom_base_url()}login"
         try:
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

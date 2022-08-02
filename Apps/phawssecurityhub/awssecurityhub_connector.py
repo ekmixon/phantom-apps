@@ -46,8 +46,7 @@ class AwsSecurityHubConnector(BaseConnector):
     def _handle_get_ec2_role(self):
 
         session = Session(region_name=self._region)
-        credentials = session.get_credentials()
-        return credentials
+        return session.get_credentials()
 
     def initialize(self):
 
@@ -160,12 +159,9 @@ class AwsSecurityHubConnector(BaseConnector):
 
     def _create_client(self, action_result, service='securityhub', param=None):
 
-        boto_config = None
-        if self._proxy:
-            boto_config = Config(proxies=self._proxy)
-
+        boto_config = Config(proxies=self._proxy) if self._proxy else None
         # Try to get and use temporary assume role credentials from parameters
-        temp_credentials = dict()
+        temp_credentials = {}
         if param and 'credentials' in param:
             try:
                 temp_credentials = ast.literal_eval(param['credentials'])
@@ -175,8 +171,10 @@ class AwsSecurityHubConnector(BaseConnector):
 
                 self.save_progress("Using temporary assume role credentials for action")
             except Exception as e:
-                return action_result.set_status(phantom.APP_ERROR,
-                                                "Failed to get temporary credentials: {}".format(e))
+                return action_result.set_status(
+                    phantom.APP_ERROR, f"Failed to get temporary credentials: {e}"
+                )
+
 
         try:
             if self._access_key and self._secret_key:
@@ -241,10 +239,11 @@ class AwsSecurityHubConnector(BaseConnector):
         :return: container_id
         """
 
-        container_dict = {}
-        container_dict['name'] = finding['Title']
-        container_dict['source_data_identifier'] = finding['Id']
-        container_dict['description'] = finding['Description']
+        container_dict = {
+            'name': finding['Title'],
+            'source_data_identifier': finding['Id'],
+            'description': finding['Description'],
+        }
 
         container_creation_status, container_creation_msg, container_id = self.save_container(container=container_dict)
 
@@ -269,11 +268,12 @@ class AwsSecurityHubConnector(BaseConnector):
 
         for resource in finding.pop('Resources'):
 
-            resource_artifact = {}
-            resource_artifact['name'] = '{} Resource Artifact'.format(resource['Type'])
-            resource_artifact['container_id'] = container_id
-            resource_artifact['source_data_identifier'] = resource['Id']
-            resource_artifact['cef'] = {}
+            resource_artifact = {
+                'name': f"{resource['Type']} Resource Artifact",
+                'container_id': container_id,
+                'source_data_identifier': resource['Id'],
+                'cef': {},
+            }
 
             # Flatten the JSON, by moving the Details up one level
             if 'Details' in resource:
@@ -289,12 +289,14 @@ class AwsSecurityHubConnector(BaseConnector):
 
             artifacts.append(resource_artifact)
 
-        finding_artifact = {}
-        finding_artifact['name'] = 'Finding Artifact'
-        finding_artifact['container_id'] = container_id
-        finding_artifact['source_data_identifier'] = finding['Id']
-        finding_artifact['cef'] = finding
-        finding_artifact['cef_types'] = AWSSECURITYHUB_FINDING_CEF_TYPES
+        finding_artifact = {
+            'name': 'Finding Artifact',
+            'container_id': container_id,
+            'source_data_identifier': finding['Id'],
+            'cef': finding,
+            'cef_types': AWSSECURITYHUB_FINDING_CEF_TYPES,
+        }
+
         artifacts.append(finding_artifact)
 
         create_artifact_status, create_artifact_msg, _ = self.save_artifacts(artifacts)
@@ -332,7 +334,10 @@ class AwsSecurityHubConnector(BaseConnector):
                 if message_dict and message_dict.get('detail', {}).get('findings', []):
                     findings.extend(json.loads(message['Body'])['detail']['findings'])
                 else:
-                    self.debug_print("Skipping the following sqs message because of failure to extract finding object: {}".format(message_dict))
+                    self.debug_print(
+                        f"Skipping the following sqs message because of failure to extract finding object: {message_dict}"
+                    )
+
                     continue
 
                 ret_val, resp_json = self._make_boto_call(action_result, 'delete_message', QueueUrl=url, ReceiptHandle=message['ReceiptHandle'])
@@ -457,33 +462,27 @@ class AwsSecurityHubConnector(BaseConnector):
         resource_region = param.get('resource_region')
         is_archived = param.get('is_archived')
 
-        filters = dict()
+        filters = {}
 
         if resource_id:
-            filters.update({
-                "ResourceId": [{
-                    "Value": resource_id,
-                    "Comparison": AWSSECURITYHUB_EQUALS_CONSTS
-                }]
-            })
+            filters["ResourceId"] = [
+                {"Value": resource_id, "Comparison": AWSSECURITYHUB_EQUALS_CONSTS}
+            ]
+
 
         if is_archived:
-            filters.update({
-                "RecordState": [{
-                    "Value": 'ARCHIVED',
-                    "Comparison": AWSSECURITYHUB_EQUALS_CONSTS
-                }]
-            })
+            filters["RecordState"] = [
+                {"Value": 'ARCHIVED', "Comparison": AWSSECURITYHUB_EQUALS_CONSTS}
+            ]
+
         else:
-            filters.update({
-                "RecordState": [{
-                    "Value": 'ACTIVE',
-                    "Comparison": AWSSECURITYHUB_EQUALS_CONSTS
-                }]
-            })
+            filters["RecordState"] = [
+                {"Value": 'ACTIVE', "Comparison": AWSSECURITYHUB_EQUALS_CONSTS}
+            ]
+
 
         if resource_ec2_ipv4_addresses:
-            ip_add_list = list()
+            ip_add_list = []
             resource_ec2_ipv4_address_list = resource_ec2_ipv4_addresses.replace(" ", "").split(',')
             for ip_add in resource_ec2_ipv4_address_list:
                 if ip_add:
@@ -491,17 +490,18 @@ class AwsSecurityHubConnector(BaseConnector):
                         ipaddress.ip_address(str(ip_add))
                         ip_add_list.append({"Cidr": ip_add})
                     except:
-                        self.debug_print('Resource ec2 IP validation failed for {}. Hence, skipping this IP address from being added to the filter.'.format(ip_add))
+                        self.debug_print(
+                            f'Resource ec2 IP validation failed for {ip_add}. Hence, skipping this IP address from being added to the filter.'
+                        )
+
 
             if not ip_add_list:
                 return action_result.set_status(phantom.APP_ERROR, AWSSECURITYHUB_ERR_ALL_RESOURCE_IP_VALIDATION)
 
-            filters.update({
-                "ResourceAwsEc2InstanceIpV4Addresses": ip_add_list
-            })
+            filters["ResourceAwsEc2InstanceIpV4Addresses"] = ip_add_list
 
         if network_source_ipv4:
-            ip_add_list = list()
+            ip_add_list = []
             network_source_ipv4_list = network_source_ipv4.replace(" ", "").split(',')
             for ip_add in network_source_ipv4_list:
                 if ip_add:
@@ -509,30 +509,33 @@ class AwsSecurityHubConnector(BaseConnector):
                         ipaddress.ip_address(str(ip_add))
                         ip_add_list.append({"Cidr": ip_add})
                     except:
-                        self.debug_print('Resource ec2 IP validation failed for {}. Hence, skipping this IP address from being added to the filter.'.format(ip_add))
+                        self.debug_print(
+                            f'Resource ec2 IP validation failed for {ip_add}. Hence, skipping this IP address from being added to the filter.'
+                        )
+
 
             if not ip_add_list:
                 return action_result.set_status(phantom.APP_ERROR, AWSSECURITYHUB_ERR_ALL_NETWORK_IP_VALIDATION)
 
-            filters.update({
-                "NetworkSourceIpV4": ip_add_list
-            })
+            filters["NetworkSourceIpV4"] = ip_add_list
 
         if network_source_mac:
-            filters.update({
-                "NetworkSourceMac": [{
+            filters["NetworkSourceMac"] = [
+                {
                     "Value": network_source_mac,
-                    "Comparison": AWSSECURITYHUB_EQUALS_CONSTS
-                }]
-            })
+                    "Comparison": AWSSECURITYHUB_EQUALS_CONSTS,
+                }
+            ]
+
 
         if resource_region:
-            filters.update({
-                "ResourceRegion": [{
+            filters["ResourceRegion"] = [
+                {
                     "Value": resource_region,
-                    "Comparison": AWSSECURITYHUB_EQUALS_CONSTS
-                }]
-            })
+                    "Comparison": AWSSECURITYHUB_EQUALS_CONSTS,
+                }
+            ]
+
 
         list_findings = self._paginator('get_findings', filters, limit, action_result)
 
@@ -540,11 +543,10 @@ class AwsSecurityHubConnector(BaseConnector):
             return action_result.get_status()
 
         for finding in list_findings:
-            resources = finding.get('Resources')
-            if resources:
+            if resources := finding.get('Resources'):
                 for resource in resources:
                     resource_type = resource.get('Type')
-                    if resource_type and 'AwsEc2Instance' == resource_type:
+                    if resource_type and resource_type == 'AwsEc2Instance':
                         instance_list = resource.get('Id', '').split(':instance/i-')
                         if instance_list and len(instance_list) == 2:
                             resource['InstanceId'] = 'i-{0}'.format(instance_list[1])
@@ -557,7 +559,7 @@ class AwsSecurityHubConnector(BaseConnector):
 
     def _paginator(self, method_name, filters, limit, action_result):
 
-        list_items = list()
+        list_items = []
         next_token = None
 
         while True:
@@ -607,11 +609,10 @@ class AwsSecurityHubConnector(BaseConnector):
             return action_result.get_status()
 
         for finding in response.get("Findings", []):
-            resources = finding.get('Resources')
-            if resources:
+            if resources := finding.get('Resources'):
                 for resource in resources:
                     resource_type = resource.get('Type')
-                    if resource_type and 'AwsEc2Instance' == resource_type:
+                    if resource_type and resource_type == 'AwsEc2Instance':
                         instance_list = resource.get('Id', '').split(':instance/i-')
                         if instance_list and len(instance_list) == 2:
                             resource['InstanceId'] = 'i-{0}'.format(instance_list[1])
@@ -800,7 +801,7 @@ class AwsSecurityHubConnector(BaseConnector):
 
     def handle_action(self, param):
 
-        self.debug_print("action_id: {}".format(self.get_action_identifier()))
+        self.debug_print(f"action_id: {self.get_action_identifier()}")
 
         # Dictionary mapping each action with its corresponding actions
         action_mapping = {
@@ -850,25 +851,23 @@ if __name__ == '__main__':
 
     if (username and password):
         try:
-            login_url = BaseConnector._get_phantom_base_url() + '/login'
+            login_url = f'{BaseConnector._get_phantom_base_url()}/login'
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platfrom. Error: " + str(e))
+            print(f"Unable to get session id from the platfrom. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

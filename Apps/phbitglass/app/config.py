@@ -37,10 +37,7 @@ def byteify(inp):
     elif isinstance(inp, list):
         return [byteify(element) for element in inp]
     elif isinstance(inp, string_types):
-        if PY2:
-            return inp.encode('utf-8')
-        else:
-            return inp
+        return inp.encode('utf-8') if PY2 else inp
     else:
         return inp
 
@@ -48,11 +45,8 @@ def byteify(inp):
 # Convert the object to dict for saving to json
 def to_dict(obj):
     mod = obj.__class__.__module__
-    if mod == 'builtins' or mod == '__builtin__':
-        if type(obj).__name__ == 'list':
-            return [to_dict(el) for el in obj]
-        else:
-            return obj
+    if mod in ['builtins', '__builtin__']:
+        return [to_dict(el) for el in obj] if type(obj).__name__ == 'list' else obj
     else:
         # TODO Check for methods and classes to exclude them and get rid of the underscore in their names
         # if PY2:
@@ -108,9 +102,7 @@ def tempfile(filepath, mode, suffix=''):
     try:
         os.remove(tf.name)
     except OSError as e:
-        if e.errno == 2:
-            pass
-        else:
+        if e.errno != 2:
             raise e
 
 
@@ -217,7 +209,10 @@ class Config(object):
                     # if 'config.json' in fname:
                     #     app.config[key] = value
         except Exception as ex:
-            log('Could not load last configuration %s across app sessions: %s' % (fname, ex), level='info')
+            log(
+                f'Could not load last configuration {fname} across app sessions: {ex}',
+                level='info',
+            )
 
     def _deepcopy(self):
         session = self._session
@@ -235,11 +230,7 @@ class Config(object):
         except Exception as ex:
             self._folder = '/store/'
 
-        if fname is None:
-            self._fname = None
-        else:
-            self._fname = os.path.join(self._folder, fname)
-
+        self._fname = None if fname is None else os.path.join(self._folder, fname)
         self._isDaemon = True
 
         # Assume QRadar by default so need not to tweak config.json
@@ -267,29 +258,27 @@ class Config(object):
         self._session = session
 
     @contextmanager
-    def _lock(conf, condition, notify=True):
+    def _lock(self, condition, notify=True):
         if condition is not None:
             condition.acquire()
-        yield conf
+        yield self
         if notify:
-            conf.updateCount = conf.updateCount + 1
+            self.updateCount = self.updateCount + 1
         if condition is not None:
             if notify:
                 condition.notify()
             condition.release()
-        else:
-            if notify:
-                conf.status['updateCount'] = conf.updateCount
+        elif notify:
+            self.status['updateCount'] = self.updateCount
 
     def _isEnabled(self, featureName):
-        for f in self.featureset:
-            if hasattr(f, '__dict__'):
-                if featureName in f.__dict__:
-                    return True
-            else:
-                if featureName in f:
-                    return True
-        return False
+        return any(
+            hasattr(f, '__dict__')
+            and featureName in f.__dict__
+            or not hasattr(f, '__dict__')
+            and featureName in f
+            for f in self.featureset
+        )
 
     def _save(self):
         if self._fname is None:
@@ -313,7 +302,10 @@ class Config(object):
                 with open_atomic(self._fname, 'w') as f:
                     json.dump(d, f, indent=2, sort_keys=True)
         except Exception as ex:
-            log('Could not save last configuration %s across app sessions: %s' % (self._fname, ex), level='warn')
+            log(
+                f'Could not save last configuration {self._fname} across app sessions: {ex}',
+                level='warn',
+            )
 
     def _waitForStatus(self):
         while self.status['updateCount'] < self.updateCount:
@@ -325,13 +317,13 @@ class Config(object):
     def _matchHost(self, h):
         # ^(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))\.|(?:(?:[a-z_-][a-z0-9_-]{0,62})?[a-z0-9]\.)+(?:[a-z]{2,}\.?)?)$
         return re.match(
-            r'^(?:'      # FIXED Added ^
+            r'^(?:'  # FIXED Added ^
             # IP address exclusion
             # private & local networks
             # FIXED: Commented out to allow private and local
-                # r'(?!(?:10|127)(?:\.\d{1,3}){3})'
-                # r'(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})'
-                # r'(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})'
+            # r'(?!(?:10|127)(?:\.\d{1,3}){3})'
+            # r'(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})'
+            # r'(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})'
             # IP address dotted notation octets
             # excludes loopback network 0.0.0.0
             # excludes reserved space >= 224.0.0.0
@@ -341,25 +333,23 @@ class Config(object):
             r'(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])'
             r'(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}'
             r'(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))'
-            r'\.|'    # FIXED original u"|", this is a trick to match 'localhost' by appending '.'
+            r'\.|'  # FIXED original u"|", this is a trick to match 'localhost' by appending '.'
             # host & domain names, may end with dot
-            r'(?:'
-            r'(?:'
+            r'(?:' r'(?:'
             # r'[a-z0-9\u00a1-\uffff]'
             # r'[a-z0-9\u00a1-\uffff_-]{0,62}'
             # FIXED original u"[a-z0-9_-]", allowing digits in the first position
             # discards all ip matching before (like disallowing 127.x.x.x)
-            r'[a-z_-]'
-            r'[a-z0-9_-]{0,62}'
-            r')?'
+            r'[a-z_-]' r'[a-z0-9_-]{0,62}' r')?'
             # r'[a-z0-9\u00a1-\uffff]\.'
-            r'[a-z0-9]\.'
-            r')+'
+            r'[a-z0-9]\.' r')+'
             # TLD identifier name, may end with dot
             # r'(?:[a-z\u00a1-\uffff]{2,}\.?)"
-            r'(?:[a-z]{2,}\.?)?'     # FIXED Made it optional by appending '?' to support 'localhost'
-            r')$',                   # FIXED Added $
-            h + '.', re.I)           # FIXED Append '.'
+            r'(?:[a-z]{2,}\.?)?'  # FIXED Made it optional by appending '?' to support 'localhost'
+            r')$',
+            f'{h}.',
+            re.I,
+        )
 
 
 startConf = Config()

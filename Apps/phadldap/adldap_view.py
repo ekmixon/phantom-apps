@@ -5,13 +5,11 @@
 
 
 def get_ctx_result(result):
-    ctx_result = {}
     param = result.get_param()
     summary = result.get_summary()
     data = result.get_data()
 
-    ctx_result['param'] = param
-
+    ctx_result = {'param': param}
     if (data):
         ctx_result['data'] = data[0]
 
@@ -24,14 +22,14 @@ def get_ctx_result(result):
 def display_attributes(provides, all_app_runs, context):
     context['results'] = results = []
     context['attributes'] = []
-    print("DEBUG all_app_runs = {}".format(all_app_runs))
+    print(f"DEBUG all_app_runs = {all_app_runs}")
     for summary, action_results in all_app_runs:
         for result in action_results:
             ctx_result = get_ctx_result(result)
             if (not ctx_result):
                 continue
             results.append(ctx_result)
-    print("DEBUG ctx_result = {}".format(ctx_result))
+    print(f"DEBUG ctx_result = {ctx_result}")
 
     # populate keys into 'attributes' variable for django template
     try:

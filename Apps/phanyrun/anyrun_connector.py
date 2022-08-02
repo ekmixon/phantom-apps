@@ -79,8 +79,10 @@ class AnyrunConnector(BaseConnector):
 
         return RetVal(
             action_result.set_status(
-                phantom.APP_ERROR, "Status Code: {}. Empty response, no information in header".format(response.status_code)
-            ), None
+                phantom.APP_ERROR,
+                f"Status Code: {response.status_code}. Empty response, no information in header",
+            ),
+            None,
         )
 
     def _process_html_response(self, response, action_result):
@@ -180,7 +182,7 @@ class AnyrunConnector(BaseConnector):
             )
 
         # Create a URL to connect to
-        url = "{}{}".format(self._base_url, endpoint)
+        url = f"{self._base_url}{endpoint}"
 
         try:
             r = request_func(
@@ -189,7 +191,8 @@ class AnyrunConnector(BaseConnector):
                 **kwargs
             )
         except requests.exceptions.ConnectionError:
-            err = "Error connecting to server. Connection Refused from the Server for %s" % (url)
+            err = f"Error connecting to server. Connection Refused from the Server for {url}"
+
             return RetVal(action_result.set_status(phantom.APP_ERROR, err), resp_json)
         except Exception as e:
             err = self._get_error_message_from_exception(e)
@@ -241,14 +244,20 @@ class AnyrunConnector(BaseConnector):
             # the call to the 3rd party device or service failed, action result should contain all the error details
             return action_result.get_status()
 
-        self.save_progress("Successfully fetched report for {}".format(id))
+        self.save_progress(f"Successfully fetched report for {id}")
         try:
             action_result.add_data(response['data'])
         except Exception as e:
             err = self._get_error_message_from_exception(e)
-            return action_result.set_status(phantom.APP_ERROR, "Error occurred while processing response from server. {}".format(err))
+            return action_result.set_status(
+                phantom.APP_ERROR,
+                f"Error occurred while processing response from server. {err}",
+            )
 
-        return action_result.set_status(phantom.APP_SUCCESS, "Successfully fetched report for {}".format(id))
+
+        return action_result.set_status(
+            phantom.APP_SUCCESS, f"Successfully fetched report for {id}"
+        )
 
     def _handle_detonate_file(self, param):
         self.save_progress("In action handler for: {0}".format(
@@ -261,7 +270,7 @@ class AnyrunConnector(BaseConnector):
             success, message, vault_meta_info = ph_rules.vault_info(vault_id=vault_id)
             vault_meta_info = list(vault_meta_info)
             if not success or not vault_meta_info:
-                error_msg = " Error Details: {}".format(unquote(message)) if message else ''
+                error_msg = f" Error Details: {unquote(message)}" if message else ''
                 return action_result.set_status(phantom.APP_ERROR, "{}. {}".format(ANYRUN_ERR_UNABLE_TO_FETCH_FILE.format(key="vault meta info"), error_msg))
         except Exception as e:
             err = self._get_error_message_from_exception(e)
@@ -275,7 +284,7 @@ class AnyrunConnector(BaseConnector):
         except:
             return action_result.set_status(phantom.APP_ERROR, ANYRUN_ERR_UNABLE_TO_FETCH_FILE.format(key="path"))
 
-        self.save_progress("Detonating file {}".format(file_path))
+        self.save_progress(f"Detonating file {file_path}")
         files = [
             ('file', open(file_path, 'rb'))
         ]
@@ -294,7 +303,11 @@ class AnyrunConnector(BaseConnector):
             action_result.add_data(response['data'])
         except Exception as e:
             err = self._get_error_message_from_exception(e)
-            return action_result.set_status(phantom.APP_ERROR, "Error occurred while processing response from server. {}".format(err))
+            return action_result.set_status(
+                phantom.APP_ERROR,
+                f"Error occurred while processing response from server. {err}",
+            )
+
 
         return action_result.set_status(phantom.APP_SUCCESS, "Successfully detonated file")
 
@@ -304,7 +317,7 @@ class AnyrunConnector(BaseConnector):
         # Get the action that we are supposed to execute for this App Run
         action_id = self.get_action_identifier()
 
-        self.debug_print("action_id: {}".format(self.get_action_identifier()))
+        self.debug_print(f"action_id: {self.get_action_identifier()}")
 
         if action_id == 'test_connectivity':
             ret_val = self._handle_test_connectivity(param)
@@ -327,9 +340,7 @@ class AnyrunConnector(BaseConnector):
 
         self._base_url = config['base_url']
         self._api_key = config['api_key']
-        self._headers = {
-            'Authorization': 'API-Key {}'.format(self._api_key)
-        }
+        self._headers = {'Authorization': f'API-Key {self._api_key}'}
         # Security check on URL format
         if not self._base_url.endswith('/'):
             self._base_url += "/"
@@ -368,27 +379,25 @@ def main():
 
     if username and password:
         try:
-            login_url = AnyrunConnector._get_phantom_base_url() + '/login'
+            login_url = f'{AnyrunConnector._get_phantom_base_url()}/login'
 
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False,
                                data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

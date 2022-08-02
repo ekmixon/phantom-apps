@@ -512,14 +512,10 @@ class AxoniusConnector(BaseConnector):
         """Launch point for Phantom actions."""
         ret_val: bool = phantom.APP_SUCCESS
         action_id: str = self.get_action_identifier()
-        self.debug_print("action_id: {}".format(action_id))
+        self.debug_print(f"action_id: {action_id}")
 
         try:
-            if action_id == "test_connectivity":
-                ret_val = self._handle_test_connectivity(param)
-            elif action_id == "devices_by_sq":
-                ret_val = self._handle_devices_by_sq(param=param, obj_type="devices")
-            elif action_id == "devices_by_hostname":
+            if action_id == "devices_by_hostname":
                 ret_val = self._handle_devices_by_hostname(
                     param=param, obj_type="devices"
                 )
@@ -527,10 +523,14 @@ class AxoniusConnector(BaseConnector):
                 ret_val = self._handle_devices_by_ip(param=param, obj_type="devices")
             elif action_id == "devices_by_mac":
                 ret_val = self._handle_devices_by_mac(param=param, obj_type="devices")
-            elif action_id == "users_by_sq":
-                ret_val = self._handle_users_by_sq(param=param, obj_type="users")
+            elif action_id == "devices_by_sq":
+                ret_val = self._handle_devices_by_sq(param=param, obj_type="devices")
+            elif action_id == "test_connectivity":
+                ret_val = self._handle_test_connectivity(param)
             elif action_id == "users_by_mail":
                 ret_val = self._handle_users_by_mail(param=param, obj_type="users")
+            elif action_id == "users_by_sq":
+                ret_val = self._handle_users_by_sq(param=param, obj_type="users")
             elif action_id == "users_by_username":
                 ret_val = self._handle_users_by_username(param=param, obj_type="users")
         except Exception as exc:
@@ -597,26 +597,24 @@ if __name__ == "__main__":
         password = getpass.getpass("Password: ")
 
     if username and password:
-        login_url = BaseConnector._get_phantom_base_url() + "login"
+        login_url = f"{BaseConnector._get_phantom_base_url()}login"
         try:
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies["csrftoken"]
 
-            data = dict()
-            data["username"] = username
-            data["password"] = password
-            data["csrfmiddlewaretoken"] = csrftoken
+            data = {
+                "username": username,
+                "password": password,
+                "csrfmiddlewaretoken": csrftoken,
+            }
 
-            headers = dict()
-            headers["Cookie"] = "csrftoken=" + csrftoken
-            headers["Referer"] = login_url
-
+            headers = {"Cookie": f"csrftoken={csrftoken}", "Referer": login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies["sessionid"]
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

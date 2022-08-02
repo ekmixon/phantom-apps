@@ -116,7 +116,13 @@ class AkamaiNetworkListsConnector(BaseConnector):
         if response.status_code == 200:
             return RetVal(phantom.APP_SUCCESS, {})
 
-        return RetVal(action_result.set_status(phantom.APP_ERROR, "Status Code: {}. Empty response and no information in the header".format(response.status_code)), None)
+        return RetVal(
+            action_result.set_status(
+                phantom.APP_ERROR,
+                f"Status Code: {response.status_code}. Empty response and no information in the header",
+            ),
+            None,
+        )
 
     def _process_html_response(self, response, action_result):
 
@@ -200,7 +206,7 @@ class AkamaiNetworkListsConnector(BaseConnector):
             return RetVal(action_result.set_status(phantom.APP_ERROR, "Invalid method: {0}".format(method)), resp_json)
 
         # Create a URL to connect to
-        url = "{}{}{}".format(self._base_url, AKAMAI_API_PATH, endpoint)
+        url = f"{self._base_url}{AKAMAI_API_PATH}{endpoint}"
 
         try:
             r = requests.Session()
@@ -212,10 +218,11 @@ class AkamaiNetworkListsConnector(BaseConnector):
             print(vars(r))
             r = request_func(url, auth=r.auth, **kwargs)
         except requests.exceptions.InvalidSchema:
-            error_message = 'Error connecting to server. No connection adapters were found for %s' % (url)
+            error_message = f'Error connecting to server. No connection adapters were found for {url}'
+
             return RetVal(action_result.set_status(phantom.APP_ERROR, error_message), resp_json)
         except requests.exceptions.InvalidURL:
-            error_message = 'Error connecting to server. Invalid URL %s' % (url)
+            error_message = f'Error connecting to server. Invalid URL {url}'
             return RetVal(action_result.set_status(phantom.APP_ERROR, error_message), resp_json)
         except requests.exceptions.ConnectionError:
             error_message = "Error Details: Connection Refused from the Server"
@@ -298,7 +305,10 @@ class AkamaiNetworkListsConnector(BaseConnector):
         # Loop through each Network ID to retrive the data.
         for networklist in param_networklistid:
             # Format the URI
-            endpoint = self._process_parameters("{}/{}".format(AKAMAI_NETWORK_LIST_ENDPOINT, networklist), params)
+            endpoint = self._process_parameters(
+                f"{AKAMAI_NETWORK_LIST_ENDPOINT}/{networklist}", params
+            )
+
 
             # make rest call
             ret_val, response = self._make_rest_call(endpoint, action_result, params=None, headers=None)
@@ -328,7 +338,11 @@ class AkamaiNetworkListsConnector(BaseConnector):
             # Can assign manually but it wont be as flexible if the API changes.
             params = {'element': self._handle_py_ver_compat_for_input_str(param.get('elements'))}
 
-            endpoint = self._process_parameters("{}/{}/elements".format(AKAMAI_NETWORK_LIST_ENDPOINT, self._handle_py_ver_compat_for_input_str(param.get('networklistid'))), params)
+            endpoint = self._process_parameters(
+                f"{AKAMAI_NETWORK_LIST_ENDPOINT}/{self._handle_py_ver_compat_for_input_str(param.get('networklistid'))}/elements",
+                params,
+            )
+
 
             # make rest call
             ret_val, response = self._make_rest_call(endpoint, action_result, params=None, headers=None, method="put")
@@ -339,7 +353,8 @@ class AkamaiNetworkListsConnector(BaseConnector):
                 # Add element to the list
                 data['list'].append(element)
 
-            endpoint = "{}/{}/append".format(AKAMAI_NETWORK_LIST_ENDPOINT, self._handle_py_ver_compat_for_input_str(param.get('networklistid')))
+            endpoint = f"{AKAMAI_NETWORK_LIST_ENDPOINT}/{self._handle_py_ver_compat_for_input_str(param.get('networklistid'))}/append"
+
 
             # make rest call
             ret_val, response = self._make_rest_call(endpoint, action_result, params=None, headers=None, method="post", json=data)
@@ -367,7 +382,11 @@ class AkamaiNetworkListsConnector(BaseConnector):
             # Can assign manually but it wont be as flexible if the API changes.
             params = {'element': self._handle_py_ver_compat_for_input_str(param.get('elements'))}
 
-            endpoint = self._process_parameters("{}/{}/elements".format(AKAMAI_NETWORK_LIST_ENDPOINT, self._handle_py_ver_compat_for_input_str(param.get('networklistid'))), params)
+            endpoint = self._process_parameters(
+                f"{AKAMAI_NETWORK_LIST_ENDPOINT}/{self._handle_py_ver_compat_for_input_str(param.get('networklistid'))}/elements",
+                params,
+            )
+
 
             # make rest call
             ret_val, response = self._make_rest_call(endpoint, action_result, params=None, headers=None, method="delete")
@@ -376,7 +395,8 @@ class AkamaiNetworkListsConnector(BaseConnector):
 
             # Need to get the list of items before we can remove them. We also need other data to be able to update the network list.
             # Format the URI
-            endpoint = "{}/{}".format(AKAMAI_NETWORK_LIST_ENDPOINT, self._handle_py_ver_compat_for_input_str(param.get('networklistid')))
+            endpoint = f"{AKAMAI_NETWORK_LIST_ENDPOINT}/{self._handle_py_ver_compat_for_input_str(param.get('networklistid'))}"
+
 
             # make rest call
             ret_val, response = self._make_rest_call(endpoint, action_result, params=None, headers=None)
@@ -384,17 +404,17 @@ class AkamaiNetworkListsConnector(BaseConnector):
                 networkList = response['list']
             except Exception as e:
                 err = self._get_error_message_from_exception(e)
-                return action_result.set_status(phantom.APP_ERROR, "Error occurred while processing the response. {}".format(err))
+                return action_result.set_status(
+                    phantom.APP_ERROR,
+                    f"Error occurred while processing the response. {err}",
+                )
+
             # Loop through the parameters passed.
             for item in param_elements:
-                # Index is used to pop the item from the list
-                index = 0
                 # Loop through the current list of addresses
-                for network in networkList:
+                for index, network in enumerate(networkList):
                     if item == network:
                         networkList.pop(index)
-                    index += 1
-
             # Create the data we are going to update the list details with.
             # All fields here are required for the "Update a network list" API
             data = {
@@ -421,20 +441,19 @@ class AkamaiNetworkListsConnector(BaseConnector):
 
         action_result = self.add_action_result(ActionResult(dict(param)))
 
-        # Access action parameters passed in the 'param' dictionary
-        ip_data = []
-
         ip_list = [x.strip() for x in self._handle_py_ver_compat_for_input_str(param.get("list")).split(',')]
         ip_list = list(filter(None, ip_list))
         if not ip_list:
             return action_result.set_status(phantom.APP_ERROR, "Please provide valid input value in the 'list' action parameter")
 
-        for ip in ip_list:
-            ip_data.append(ip)
-
+        ip_data = list(ip_list)
         type = self._handle_py_ver_compat_for_input_str(param.get('type'))
         if type not in TYPE_VALUE_LIST:
-            return action_result.set_status(phantom.APP_ERROR, "Please provide valid input from {} in 'type' action parameter".format(TYPE_VALUE_LIST))
+            return action_result.set_status(
+                phantom.APP_ERROR,
+                f"Please provide valid input from {TYPE_VALUE_LIST} in 'type' action parameter",
+            )
+
 
         data = {
             "name": self._handle_py_ver_compat_for_input_str(param.get('name')),
@@ -443,7 +462,7 @@ class AkamaiNetworkListsConnector(BaseConnector):
             "list": ip_data
         }
 
-        endpoint = "{}".format(AKAMAI_NETWORK_LIST_ENDPOINT)
+        endpoint = f"{AKAMAI_NETWORK_LIST_ENDPOINT}"
 
         # make rest call
         ret_val, response = self._make_rest_call(endpoint, action_result, params=None, headers=None, method="post", json=data)
@@ -461,7 +480,8 @@ class AkamaiNetworkListsConnector(BaseConnector):
         action_result = self.add_action_result(ActionResult(dict(param)))
 
         # Access action parameters passed in the 'param' dictionary
-        endpoint = "{}/{}/details".format(AKAMAI_NETWORK_LIST_ENDPOINT, self._handle_py_ver_compat_for_input_str(param.get('networklistid')))
+        endpoint = f"{AKAMAI_NETWORK_LIST_ENDPOINT}/{self._handle_py_ver_compat_for_input_str(param.get('networklistid'))}/details"
+
 
         data = {
             "name": self._handle_py_ver_compat_for_input_str(param.get('name')),
@@ -486,7 +506,8 @@ class AkamaiNetworkListsConnector(BaseConnector):
 
         # Access action parameters passed in the 'param' dictionary
 
-        endpoint = "{}/{}".format(AKAMAI_NETWORK_LIST_ENDPOINT, self._handle_py_ver_compat_for_input_str(param.get('networklistid')))
+        endpoint = f"{AKAMAI_NETWORK_LIST_ENDPOINT}/{self._handle_py_ver_compat_for_input_str(param.get('networklistid'))}"
+
 
         # make rest call
         ret_val, response = self._make_rest_call(endpoint, action_result, params=None, headers=None, method="delete")
@@ -513,22 +534,22 @@ class AkamaiNetworkListsConnector(BaseConnector):
         # Notification parameter is used
         if param.get("notification"):
             notifications = [x.strip() for x in self._handle_py_ver_compat_for_input_str(param.get("notification")).split(',')]
-            notifications = list(filter(None, notifications))
-            if not notifications:
+            if notifications := list(filter(None, notifications)):
+                data['notification'] = list(notifications)
+
+            else:
                 return action_result.set_status(phantom.APP_ERROR, "Please provide valid input value in the 'notification' action parameter")
-
-            notificationEmails = []
-
-            for notificationEmail in notifications:
-                notificationEmails.append(notificationEmail)
-
-            data['notification'] = notificationEmails
 
         environment = self._handle_py_ver_compat_for_input_str(param.get('environment'))
         if environment not in ENVIRONMENT_VALUE_LIST:
-            return action_result.set_status(phantom.APP_ERROR, "Please provide valid input from {} in 'environment' action parameter".format(ENVIRONMENT_VALUE_LIST))
+            return action_result.set_status(
+                phantom.APP_ERROR,
+                f"Please provide valid input from {ENVIRONMENT_VALUE_LIST} in 'environment' action parameter",
+            )
 
-        endpoint = "{}/{}/environments/{}/activate".format(AKAMAI_NETWORK_LIST_ENDPOINT, self._handle_py_ver_compat_for_input_str(param.get('networklistid')), environment)
+
+        endpoint = f"{AKAMAI_NETWORK_LIST_ENDPOINT}/{self._handle_py_ver_compat_for_input_str(param.get('networklistid'))}/environments/{environment}/activate"
+
 
         # make rest call
         ret_val, response = self._make_rest_call(endpoint, action_result, params=None, headers=None, method="post", json=data)
@@ -548,9 +569,14 @@ class AkamaiNetworkListsConnector(BaseConnector):
 
         environment = self._handle_py_ver_compat_for_input_str(param.get('environment'))
         if environment not in ENVIRONMENT_VALUE_LIST:
-            return action_result.set_status(phantom.APP_ERROR, "Please provide valid input from {} in 'environment' action parameter".format(ENVIRONMENT_VALUE_LIST))
+            return action_result.set_status(
+                phantom.APP_ERROR,
+                f"Please provide valid input from {ENVIRONMENT_VALUE_LIST} in 'environment' action parameter",
+            )
 
-        endpoint = "{}/{}/environments/{}/status".format(AKAMAI_NETWORK_LIST_ENDPOINT, self._handle_py_ver_compat_for_input_str(param.get('networklistid')), environment)
+
+        endpoint = f"{AKAMAI_NETWORK_LIST_ENDPOINT}/{self._handle_py_ver_compat_for_input_str(param.get('networklistid'))}/environments/{environment}/status"
+
 
         # make rest call
         ret_val, response = self._make_rest_call(endpoint, action_result, params=None, headers=None)
@@ -574,8 +600,11 @@ class AkamaiNetworkListsConnector(BaseConnector):
         if phantom.is_fail(ret_val):
             return action_result.get_status()
 
-        endpoint = self._process_parameters("{}/{}/sync-points/{}/history".format(AKAMAI_NETWORK_LIST_ENDPOINT,
-                                                                            self._handle_py_ver_compat_for_input_str(param.get('networklistid')), syncpoint), params)
+        endpoint = self._process_parameters(
+            f"{AKAMAI_NETWORK_LIST_ENDPOINT}/{self._handle_py_ver_compat_for_input_str(param.get('networklistid'))}/sync-points/{syncpoint}/history",
+            params,
+        )
+
 
         # make rest call
         ret_val, response = self._make_rest_call(endpoint, action_result, params=None, headers=None)
@@ -597,7 +626,7 @@ class AkamaiNetworkListsConnector(BaseConnector):
         if phantom.is_fail(ret_val):
             return action_result.get_status()
 
-        endpoint = "{}/{}".format(AKAMAI_ACTIVATIONS_ENDPOINT, activationid)
+        endpoint = f"{AKAMAI_ACTIVATIONS_ENDPOINT}/{activationid}"
 
         # make rest call
         ret_val, response = self._make_rest_call(endpoint, action_result, params=None, headers=None)
@@ -614,7 +643,7 @@ class AkamaiNetworkListsConnector(BaseConnector):
         :param param: dictionary which contains information about the actions to be executed
         :return: status success/failure
         """
-        self.debug_print('action_id: {}'.format(self.get_action_identifier()))
+        self.debug_print(f'action_id: {self.get_action_identifier()}')
 
         action_mapping = {
             'test_connectivity': self._handle_test_connectivity,
@@ -634,7 +663,7 @@ class AkamaiNetworkListsConnector(BaseConnector):
         action = self.get_action_identifier()
         action_execution_status = phantom.APP_SUCCESS
 
-        if action in action_mapping.keys():
+        if action in action_mapping:
             action_function = action_mapping[action]
             action_execution_status = action_function(param)
         return action_execution_status
@@ -649,14 +678,14 @@ class AkamaiNetworkListsConnector(BaseConnector):
         first_param = True
 
         if len(params) > 0:
-            endpoint = "{}{}".format(endpoint, "?")
+            endpoint = f"{endpoint}?"
 
             for param, value in params.items():
                 if first_param:
-                    endpoint = "{}{}={}".format(endpoint, param, value)
+                    endpoint = f"{endpoint}{param}={value}"
                     first_param = False
                 else:
-                    endpoint = "{}&{}={}".format(endpoint, param, value)
+                    endpoint = f"{endpoint}&{param}={value}"
         else:
             endpoint = endpoint
 
@@ -718,26 +747,24 @@ if __name__ == '__main__':
 
     if username and password:
         try:
-            login_url = AkamaiNetworkListsConnector._get_phantom_base_url() + '/login'
+            login_url = f'{AkamaiNetworkListsConnector._get_phantom_base_url()}/login'
 
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

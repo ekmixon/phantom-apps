@@ -111,12 +111,8 @@ class EdgeGridAuth(AuthBase):
             default is 'default')
 
         """
-        from .edgerc import EdgeRc 
-        if isinstance(rcinput, EdgeRc):
-            rc = rcinput
-        else:
-            rc = EdgeRc(rcinput)
-
+        from .edgerc import EdgeRc
+        rc = rcinput if isinstance(rcinput, EdgeRc) else EdgeRc(rcinput)
         return EdgeGridAuth(
             client_token=rc.get(section, 'client_token'),
             client_secret=rc.get(section, 'client_secret'),
@@ -135,10 +131,13 @@ class EdgeGridAuth(AuthBase):
 
         # note: r.headers is a case-insensitive dict and self.headers_to_sign
         # should already be lowercased at this point
-        return '\t'.join([
-            "%s:%s" % (h, spaces_re.sub(' ', r.headers[h].strip()))
-            for h in self.headers_to_sign if h in r.headers
-        ])
+        return '\t'.join(
+            [
+                f"{h}:{spaces_re.sub(' ', r.headers[h].strip())}"
+                for h in self.headers_to_sign
+                if h in r.headers
+            ]
+        )
 
     def make_content_hash(self, r):
         content_hash = ""
@@ -152,7 +151,7 @@ class EdgeGridAuth(AuthBase):
                     "data length %d is larger than maximum %d", 
                     len(prepared_body), self.max_body
                 )
-                prepared_body = prepared_body[0:self.max_body]
+                prepared_body = prepared_body[:self.max_body]
                 logger.debug("data truncated to %d for computing the hash", len(prepared_body))
 
             content_hash = base64_sha256(prepared_body)
@@ -168,12 +167,15 @@ class EdgeGridAuth(AuthBase):
         akamai_cli = os.getenv('AKAMAI_CLI')
         akamai_cli_version = os.getenv('AKAMAI_CLI_VERSION')
         if akamai_cli and akamai_cli_version:
-            version_header += " AkamaiCLI/" + akamai_cli_version
+            version_header += f" AkamaiCLI/{akamai_cli_version}"
 
         akamai_cli_command = os.getenv('AKAMAI_CLI_COMMAND')
         akamai_cli_command_version = os.getenv('AKAMAI_CLI_COMMAND_VERSION')
         if akamai_cli_command and akamai_cli_command_version:
-            version_header += " AkamaiCLI-" + akamai_cli_command + "/" + akamai_cli_command_version
+            version_header += (
+                f" AkamaiCLI-{akamai_cli_command}/{akamai_cli_command_version}"
+            )
+
 
         if version_header != '':
             if 'User-Agent' not in header:
@@ -193,16 +195,19 @@ class EdgeGridAuth(AuthBase):
 
         self.get_header_versions(r.headers)
 
-        data_to_sign = '\t'.join([
-            r.method,
-            parsed_url.scheme,
-            netloc,
-            # Note: relative URL constraints are handled by requests when it sets up 'r'
-            parsed_url.path + ('?' + parsed_url.query if parsed_url.query else ""),
-            self.canonicalize_headers(r),
-            self.make_content_hash(r),
-            auth_header
-        ])
+        data_to_sign = '\t'.join(
+            [
+                r.method,
+                parsed_url.scheme,
+                netloc,
+                parsed_url.path
+                + (f'?{parsed_url.query}' if parsed_url.query else ""),
+                self.canonicalize_headers(r),
+                self.make_content_hash(r),
+                auth_header,
+            ]
+        )
+
         logger.debug('data to sign: %s', '\\t'.join(data_to_sign.split('\t')))
         return data_to_sign
 

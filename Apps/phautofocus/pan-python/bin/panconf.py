@@ -51,7 +51,6 @@ def main():
             logger.setLevel(pan.config.DEBUG2)
         elif options['debug'] == 1:
             logger.setLevel(pan.config.DEBUG1)
-
 #        log_format = '%(levelname)s %(name)s %(message)s'
         log_format = '%(message)s'
         handler = logging.StreamHandler()
@@ -89,17 +88,14 @@ def main():
         xpaths = conf.config_xpaths()
         path = './'
         if options['xpath']:
-            o = conf_flat(conf, path, xpath=options['xpath'])
-            if o:
+            if o := conf_flat(conf, path, xpath=options['xpath']):
                 print('\n'.join(o))
         elif conf.config_version() is None:
-            o = conf_flat(conf, path)
-            if o:
+            if o := conf_flat(conf, path):
                 print('\n'.join(o))
         else:
             for xpath in xpaths:
-                o = conf_flat(conf, path, xpath=xpath)
-                if o:
+                if o := conf_flat(conf, path, xpath=xpath):
                     print('\n'.join(o))
 
     if options['print_set']:
@@ -111,19 +107,18 @@ def main():
             if int(version[0]) >= 5:  # XXX ValueError
                 member_list = True
         if options['xpath']:
-            o = conf_set(conf, path, xpath=options['xpath'],
-                         member_list=member_list)
-            if o:
+            if o := conf_set(
+                conf, path, xpath=options['xpath'], member_list=member_list
+            ):
                 print('\n'.join(o))
         elif conf.config_version() is None:
-            o = conf_set(conf, path)
-            if o:
+            if o := conf_set(conf, path):
                 print('\n'.join(o))
         else:
             for xpath in xpaths:
-                o = conf_set(conf, path, xpath=xpath,
-                             member_list=member_list)
-                if o:
+                if o := conf_set(
+                    conf, path, xpath=xpath, member_list=member_list
+                ):
                     print('\n'.join(o))
 
     if options['print_python'] or options['print_json']:
@@ -228,7 +223,7 @@ def parse_opts():
             usage()
             sys.exit(0)
         else:
-            assert False, 'unhandled option %s' % opt
+            assert False, f'unhandled option {opt}'
 
     if len(args) > 0:
         options['xpath'] = args[0]
@@ -243,7 +238,7 @@ def read_file(path):
         try:
             f = open(path)
         except IOError as msg:
-            print('open %s: %s' % (path, msg), file=sys.stderr)
+            print(f'open {path}: {msg}', file=sys.stderr)
             sys.exit(1)
         lines = f.readlines()
         f.close()

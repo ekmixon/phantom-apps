@@ -59,8 +59,11 @@ MS_AZURE_CODE_GENERATION_SCOPE = 'https://management.azure.com/user_impersonatio
 MS_AZURE_UNKNOWN_ERR_MSG = "Unknown error occurred. Please check the asset configuration and|or action parameters."
 MS_AZURE_ERR_CODE_UNAVAILABLE = "Error code unavailable"
 MS_AZURE_UNICODE_DAMMIT_TYPE_ERR_MSG = "Error occurred while connecting to the Microsoft Azure Compute server. Please check the asset configuration and|or the action parameters."
-MS_AZURE_INVALID_PERMISSION_ERR = "Error occurred while saving the newly generated access token (in place of the expired token) in the state file."
-MS_AZURE_INVALID_PERMISSION_ERR += " Please check the owner, owner group, and the permissions of the state file. The Phantom "
+MS_AZURE_INVALID_PERMISSION_ERR = (
+    "Error occurred while saving the newly generated access token (in place of the expired token) in the state file."
+    + " Please check the owner, owner group, and the permissions of the state file. The Phantom "
+)
+
 MS_AZURE_INVALID_PERMISSION_ERR += "user should have the correct access rights and ownership for the corresponding state file (refer to readme file for more information)."
 MS_AZURE_STATE_FILE_CORRUPT_ERROR = "Error occurred while loading the state file due to its unexpected format. Resetting the state file with the default format. \
 Please try again."

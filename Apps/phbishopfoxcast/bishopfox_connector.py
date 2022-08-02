@@ -50,8 +50,10 @@ class BishopFoxConnector(BaseConnector):
 
         return RetVal(
             action_result.set_status(
-                phantom.APP_ERROR, "Status Code: {}. Empty response and no information in the header".format(response.status_code)
-            ), None
+                phantom.APP_ERROR,
+                f"Status Code: {response.status_code}. Empty response and no information in the header",
+            ),
+            None,
         )
 
     def _process_html_response(self, response, action_result):
@@ -166,13 +168,14 @@ class BishopFoxConnector(BaseConnector):
                 **kwargs
             )
         except requests.exceptions.InvalidSchema:
-            error_message = 'Error connecting to server. No connection adapters were found for {}'.format(url)
+            error_message = f'Error connecting to server. No connection adapters were found for {url}'
+
             return RetVal(action_result.set_status(phantom.APP_ERROR, error_message), resp_json)
         except requests.exceptions.InvalidURL:
-            error_message = 'Error connecting to server. Invalid URL {}'.format(url)
+            error_message = f'Error connecting to server. Invalid URL {url}'
             return RetVal(action_result.set_status(phantom.APP_ERROR, error_message), resp_json)
         except requests.exceptions.ConnectionError:
-            error_message = 'Error Details: Connection Refused from the Server {}'.format(url)
+            error_message = f'Error Details: Connection Refused from the Server {url}'
             return RetVal(action_result.set_status(phantom.APP_ERROR, error_message), resp_json)
         except Exception as e:
             return RetVal(
@@ -211,8 +214,8 @@ class BishopFoxConnector(BaseConnector):
     def _parse_finding_json(self, finding):
         subjects = []
         if finding.get("subjects"):
-            for subject in finding["subjects"]:
-                subjects.append({
+            subjects.extend(
+                {
                     "category": finding.get("category"),
                     "clientId": subject.get("clientId"),
                     "clientNote": subject.get("clientNote"),
@@ -233,8 +236,11 @@ class BishopFoxConnector(BaseConnector):
                     "subjectUid": subject.get("uid"),
                     "target": subject.get("target"),
                     "updatedAt": subject.get("updatedAt"),
-                    "reportedAt": finding.get("reportedAt")
-                })
+                    "reportedAt": finding.get("reportedAt"),
+                }
+                for subject in finding["subjects"]
+            )
+
         return subjects
 
     def _parse_subject_json(self, subject, finding_uid):
@@ -247,20 +253,21 @@ class BishopFoxConnector(BaseConnector):
     def _build_container_json(self, finding):
         label = self.get_config().get("ingest", {}).get("container_label")
         severity = consts.SEVERITY_MAP[finding["severity"]]
-        container_json = {
+        return {
             "name": finding.get("category"),
             "label": label,
             "severity": severity,
             "source_data_identifier": finding.get("subjectUid"),
-            "artifacts": [{
-                "name": finding.get("subject"),
-                "label": label,
-                "severity": severity,
-                "source_data_identifier": finding.get("subjectUid"),
-                "cef": finding
-            }]
+            "artifacts": [
+                {
+                    "name": finding.get("subject"),
+                    "label": label,
+                    "severity": severity,
+                    "source_data_identifier": finding.get("subjectUid"),
+                    "cef": finding,
+                }
+            ],
         }
-        return container_json
 
     def _get_findings(self, action_result=ActionResult({}), **kwargs):
         """
@@ -507,27 +514,25 @@ class BishopFoxConnector(BaseConnector):
         self.debug_print("action_id", self.get_action_identifier())
 
         if action_id == "test_connectivity":
-            ret_val = self._handle_test_connectivity(param)
+            return self._handle_test_connectivity(param)
 
         elif action_id == "get_findings":
-            ret_val = self._handle_get_findings(param)
+            return self._handle_get_findings(param)
 
         elif action_id == "update_status":
-            ret_val = self._handle_update_status(param)
+            return self._handle_update_status(param)
 
         elif action_id == "update_client_id":
-            ret_val = self._handle_update_client_id(param)
+            return self._handle_update_client_id(param)
 
         elif action_id == "update_client_note":
-            ret_val = self._handle_update_client_note(param)
+            return self._handle_update_client_note(param)
 
         elif action_id == "on_poll":
-            ret_val = self._handle_on_poll(param)
+            return self._handle_on_poll(param)
 
         else:
-            ret_val = phantom.APP_ERROR
-
-        return ret_val
+            return phantom.APP_ERROR
 
     def initialize(self):
         # Load the state in initialize, use it to store data
@@ -606,26 +611,24 @@ def main():
 
     if username and password:
         try:
-            login_url = BishopFoxConnector._get_phantom_base_url() + "/login"
+            login_url = f"{BishopFoxConnector._get_phantom_base_url()}/login"
 
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies["csrftoken"]
 
-            data = dict()
-            data["username"] = username
-            data["password"] = password
-            data["csrfmiddlewaretoken"] = csrftoken
+            data = {
+                "username": username,
+                "password": password,
+                "csrfmiddlewaretoken": csrftoken,
+            }
 
-            headers = dict()
-            headers["Cookie"] = "csrftoken=" + csrftoken
-            headers["Referer"] = login_url
-
+            headers = {"Cookie": f"csrftoken={csrftoken}", "Referer": login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies["sessionid"]
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

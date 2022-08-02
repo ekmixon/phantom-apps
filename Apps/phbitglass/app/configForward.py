@@ -223,8 +223,6 @@ class ConfigForward(Config):
                 proxies.append(proxy)
             except BaseException as ex:
                 raise ex
-            except Exception as ex:
-                raise BaseException('Bad proxy expression')
         return proxies
 
     # From user multi-string to param dict
@@ -233,11 +231,11 @@ class ConfigForward(Config):
         proxies = {}
         pxd = self._parseProxies(s)
         for p in pxd:
-            k = '%s' % p['schema']
-            v = '%s://%s:%s@%s:%s' % (p['schema_p'], p['user'], p['pswd'], p['host'], p['port'])
+            k = f"{p['schema']}"
+            v = f"{p['schema_p']}://{p['user']}:{p['pswd']}@{p['host']}:{p['port']}"
             if v[-1] == ':':
                 # Empty port
-                v = v[0:-1]
+                v = v[:-1]
             if ':@' in v:
                 # Empty password
                 v = v.replace(':@', '')
@@ -262,7 +260,7 @@ class ConfigForward(Config):
             # Membership 'in' operator fails unless same format (unlike ==)
             logTypes = [lt.decode('utf-8') for lt in self.log_types]
         else:
-            logTypes = [lt for lt in self.log_types]
+            logTypes = list(self.log_types)
 
         # for lt in [u'access', u'admin', u'cloud_audit']:
         for lt in [u'access', u'admin', u'cloud_audit', u'swgweb', u'swgwebdlp']:
@@ -270,41 +268,36 @@ class ConfigForward(Config):
             if len(rform.getlist(lt)):
                 if log_type not in logTypes:
                     logTypes += [log_type]
-            else:
-                if log_type in logTypes:
-                    logTypes.remove(log_type)
+            elif log_type in logTypes:
+                logTypes.remove(log_type)
 
         logTypes.sort()
-        auth_type = True if len(rform.getlist('auth_type')) else False
-        use_proxy = True if len(rform.getlist('use_proxy')) else False
+        auth_type = bool(len(rform.getlist('auth_type')))
+        use_proxy = bool(len(rform.getlist('use_proxy')))
 
-        log(str('POST %s %s %s %s' % ('auth_token', ', '.join(logTypes), log_interval, api_url)), level='info')
+        log(
+            str(f"POST auth_token {', '.join(logTypes)} {log_interval} {api_url}"),
+            level='info',
+        )
 
-        # Assume update is needed if first time
-        isChanged = True
-        if (self.updateCount > 0
-                # Don't care b/c not saved anyways
-                # and self._auth_type == True if auth_type == 'on' or auth_type == 'True' else False
-                # and self._use_proxy == True if use_proxy == 'on' or use_proxy == 'True' else False
-                #
-                # Not saved but need to check authentication to update status
-                and self._auth_token.secret == auth_token
-                and self._username == username
-                and self._password.secret == password
-                #
-                and self.log_types == logTypes
-                and self.log_interval == log_interval
-                and self.api_url == api_url
-                and self.proxies == proxies
-                and self.sink_url == sink_url):
-            # return False
-            isChanged = False
+
+        isChanged = (
+            self.updateCount <= 0
+            or self._auth_token.secret != auth_token
+            or self._username != username
+            or self._password.secret != password
+            or self.log_types != logTypes
+            or self.log_interval != log_interval
+            or self.api_url != api_url
+            or self.proxies != proxies
+            or self.sink_url != sink_url
+        )
 
         # Update the data under thread lock
         # Do it to signal the poll thread to refresh the logs, even if no settings changed
         with self._lock(condition):
-            self._auth_type = True if auth_type == 'on' or auth_type == 'True' else False
-            self._use_proxy = True if (use_proxy == 'on' or use_proxy == 'True') and proxies is not None else False
+            self._auth_type = auth_type in {'on', 'True'}
+            self._use_proxy = use_proxy in {'on', 'True'} and proxies is not None
             self._auth_token.secret = auth_token
             self._username = username
             self._password.secret = password
@@ -343,11 +336,11 @@ class ConfigForward(Config):
             badMatch = url[m.end():]
             return (badMatch, host, api_ver)
 
-        h = m.group(1)
+        h = m[1]
         if h is not None and self._matchHost(h):
             host = h
 
-        v = m.group(2)
+        v = m[2]
         if v is not None:
             api_ver = v
 
@@ -359,12 +352,7 @@ class ConfigForward(Config):
         if host is not None:
             self.host = host
 
-        if api_ver is not None:
-            self.api_ver = api_ver
-        else:
-            # Restore to default
-            self.api_ver = self._api_version_max
-
+        self.api_ver = api_ver if api_ver is not None else self._api_version_max
         addr_host, addr_port = self.sink_url.split(':')
         if ('_qradarConsoleAddress' in self.__dict__ and
                 (addr_host == 'localhost' or

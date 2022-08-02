@@ -164,9 +164,10 @@ class ArborSightlineConnector(BaseConnector):
         # Also typically it does not add any data into an action_result either.
         # The status and progress messages are more important.
         request_headers = {
-            'X-Arbux-APIToken': '{}'.format(self.get_config().get('auth_token')),
-            'Accept': 'application/json'
+            'X-Arbux-APIToken': f"{self.get_config().get('auth_token')}",
+            'Accept': 'application/json',
         }
+
 
         self.save_progress("Connecting to endpoint")
         # make rest call
@@ -204,12 +205,17 @@ class ArborSightlineConnector(BaseConnector):
                 impact_pps = data['attributes']['subobject']['impact_pps']
                 victim_router = data['attributes']['subobject']['impact_boundary']
                 classification = data['attributes']['classification']
-                description = ""
-
-                for include in alerts['included']:
-                    if include['relationships']['parent']['data']['type'] == 'alert' and include['relationships']['parent']['data']['id'] == alert_id:
-                        description = include['attributes']['text']
-                        break
+                description = next(
+                    (
+                        include['attributes']['text']
+                        for include in alerts['included']
+                        if include['relationships']['parent']['data']['type']
+                        == 'alert'
+                        and include['relationships']['parent']['data']['id']
+                        == alert_id
+                    ),
+                    "",
+                )
 
                 # Creating container
                 c = {
@@ -260,7 +266,11 @@ class ArborSightlineConnector(BaseConnector):
             except:
                 error_msg = "Unable to parse error message"
 
-            action_result.set_status(phantom.APP_ERROR, '{}. Error message: {}'.format(ARBORSIGHTLINE_PARSE_ALERTS_FAILED_MSG, error_msg))
+            action_result.set_status(
+                phantom.APP_ERROR,
+                f'{ARBORSIGHTLINE_PARSE_ALERTS_FAILED_MSG}. Error message: {error_msg}',
+            )
+
             return action_result.get_status(), None
 
         return phantom.APP_SUCCESS, alerts_cnt
@@ -268,9 +278,10 @@ class ArborSightlineConnector(BaseConnector):
     def _get_alerts(self, action_result, url, paging_obj):
         """ Fetch alerts via REST """
         request_headers = {
-            'X-Arbux-APIToken': '{}'.format(self.get_config().get('auth_token')),
-            'Accept': 'application/json'
+            'X-Arbux-APIToken': f"{self.get_config().get('auth_token')}",
+            'Accept': 'application/json',
         }
+
 
         msg = ARBORSIGHTLINE_GET_ALERTS_PROGRESS_MSG.format(
             alerts_no=paging_obj['alerts_per_page'], page_no=paging_obj['page_cnt'])
@@ -417,14 +428,17 @@ class ArborSightlineConnector(BaseConnector):
             except:
                 error_msg = "Unable to parse error message"
 
-            return action_result.set_status(phantom.APP_ERROR, '{}. Error message: {}'.format(ARBORSIGHTLINE_GET_ALERTS_PAGINATION_FAILED_MSG, error_msg))
+            return action_result.set_status(
+                phantom.APP_ERROR,
+                f'{ARBORSIGHTLINE_GET_ALERTS_PAGINATION_FAILED_MSG}. Error message: {error_msg}',
+            )
+
 
         # if single-page closure
 
         # Save checkpoint
         self._state['last_ingested_epoch'] = param[phantom.APP_JSON_END_TIME]
-        self.debug_print("Got new checkpoint: {}".format(
-            self._state['last_ingested_epoch']))
+        self.debug_print(f"Got new checkpoint: {self._state['last_ingested_epoch']}")
 
         return action_result.set_status(phantom.APP_SUCCESS)
 
@@ -446,8 +460,10 @@ class ArborSightlineConnector(BaseConnector):
 
         # handling scheduled on poll action
         if int(self._state.get('last_ingested_epoch', 0)) > 0:
-            self.debug_print("DEBUGGER: Poll already executed. Found checkpoint : {}".format(
-                self._state['last_ingested_epoch']))
+            self.debug_print(
+                f"DEBUGGER: Poll already executed. Found checkpoint : {self._state['last_ingested_epoch']}"
+            )
+
 
             param[phantom.APP_JSON_START_TIME] = self._state['last_ingested_epoch']
 
@@ -530,27 +546,25 @@ if __name__ == '__main__':
 
     if (username and password):
         try:
-            login_url = ArborSightlineConnector._get_phantom_base_url() + '/login'
+            login_url = f'{ArborSightlineConnector._get_phantom_base_url()}/login'
 
             print ("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print ("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False,
                                data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print ("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

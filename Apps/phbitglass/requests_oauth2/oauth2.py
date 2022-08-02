@@ -73,10 +73,9 @@ class OAuth2(object):
             'redirect_uri': self.redirect_uri,
             'client_id': self.client_id,
             'scope': scope,
-        }
-        oauth_params.update(kwargs)
-        return "%s%s?%s" % (self.site, quote(self.authorization_url),
-                            urlencode(oauth_params))
+        } | kwargs
+
+        return f"{self.site}{quote(self.authorization_url)}?{urlencode(oauth_params)}"
 
     def get_token(self, code, headers=None, **kwargs):
         """
@@ -84,14 +83,13 @@ class OAuth2(object):
         """
         self._check_configuration("site", "token_url", "redirect_uri",
                                   "client_id", "client_secret")
-        url = "%s%s" % (self.site, quote(self.token_url))
+        url = f"{self.site}{quote(self.token_url)}"
         data = {
             'redirect_uri': self.redirect_uri,
             'client_id': self.client_id,
             'client_secret': self.client_secret,
             'code': code,
-        }
-        data.update(kwargs)
+        } | kwargs
 
         return self._make_request(url, data=data, headers=headers)
 
@@ -101,12 +99,11 @@ class OAuth2(object):
         """
         self._check_configuration("site", "token_url", "client_id",
                                   "client_secret")
-        url = "%s%s" % (self.site, quote(self.token_url))
+        url = f"{self.site}{quote(self.token_url)}"
         data = {
             'client_id': self.client_id,
             'client_secret': self.client_secret,
-        }
-        data.update(kwargs)
+        } | kwargs
 
         return self._make_request(url, data=data, headers=headers)
 
@@ -115,8 +112,6 @@ class OAuth2(object):
         Revoke an access token
         """
         self._check_configuration("site", "revoke_uri")
-        url = "%s%s" % (self.site, quote(self.revoke_url))
-        data = {'token': token}
-        data.update(kwargs)
-
+        url = f"{self.site}{quote(self.revoke_url)}"
+        data = {'token': token} | kwargs
         return self._make_request(url, data=data, headers=headers)

@@ -70,10 +70,13 @@ class AthenaConnector(BaseConnector):
         self._access_key = config.get(consts.ATHENA_JSON_ACCESS_KEY)
         self._secret_key = config.get(consts.ATHENA_JSON_SECRET_KEY)
 
-        if not (self._access_key and self._secret_key):
-            return self.set_status(phantom.APP_ERROR, consts.ATHENA_BAD_ASSET_CONFIG_MSG)
-
-        return phantom.APP_SUCCESS
+        return (
+            phantom.APP_SUCCESS
+            if (self._access_key and self._secret_key)
+            else self.set_status(
+                phantom.APP_ERROR, consts.ATHENA_BAD_ASSET_CONFIG_MSG
+            )
+        )
 
     def finalize(self):
 
@@ -84,17 +87,13 @@ class AthenaConnector(BaseConnector):
     def _handle_get_ec2_role(self):
 
         session = Session(region_name=self._region)
-        credentials = session.get_credentials()
-        return credentials
+        return session.get_credentials()
 
     def _create_client(self, action_result, param=None):
 
-        boto_config = None
-        if self._proxy:
-            boto_config = Config(proxies=self._proxy)
-
+        boto_config = Config(proxies=self._proxy) if self._proxy else None
         # Try getting and using temporary assume role credentials from parameters
-        temp_credentials = dict()
+        temp_credentials = {}
         if param and 'credentials' in param:
             try:
                 temp_credentials = ast.literal_eval(param['credentials'])
@@ -207,8 +206,7 @@ class AthenaConnector(BaseConnector):
 
         if encryption:
 
-            encrypt_config = {}
-            encrypt_config['EncryptionOption'] = encryption
+            encrypt_config = {'EncryptionOption': encryption}
             location_json['EncryptionConfiguration'] = encrypt_config
 
             if encryption in ['SSE_KMS', 'CSE_KMS']:
@@ -248,8 +246,7 @@ class AthenaConnector(BaseConnector):
         if not execution_id:
             return action_result.set_status(phantom.APP_ERROR, "Could not get query execution ID after starting query.")
 
-        for i in range(0, 60):
-
+        for _ in range(60):
             ret_val, response = self._make_boto_call(action_result, 'get_query_execution', QueryExecutionId=execution_id)
             if (phantom.is_fail(ret_val)):
                 return ret_val
@@ -267,8 +264,6 @@ class AthenaConnector(BaseConnector):
 
             elif status in ['RUNNING', 'QUEUED']:
                 time.sleep(1)
-                continue
-
             elif status == 'SUCCEEDED':
                 break
 

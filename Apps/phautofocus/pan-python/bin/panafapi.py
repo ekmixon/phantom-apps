@@ -66,44 +66,6 @@ def main():
         options['json_request'] = '{}'
         options['json_request_obj'] = {}
 
-    if False:
-        pass
-
-    elif options['export']:
-        export(afapi, options)
-
-    elif options['sample_analysis']:
-        sample_analysis(afapi, options)
-
-    elif options['samples']:
-        search_results(afapi, options,
-                       afapi.samples_search_results)
-
-    elif options['sessions'] and options['histogram']:
-        search_results(afapi, options,
-                       afapi.sessions_histogram_search_results)
-
-    elif options['sessions'] and options['aggregate']:
-        search_results(afapi, options,
-                       afapi.sessions_aggregate_search_results)
-
-    elif options['sessions']:
-        search_results(afapi, options,
-                       afapi.sessions_search_results)
-
-    elif options['session'] is not None:
-        session(afapi, options)
-
-    elif options['top_tags']:
-        search_results(afapi, options,
-                       afapi.top_tags_search_results)
-
-    elif options['tags']:
-        tags(afapi, options)
-
-    elif options['tag'] is not None:
-        tag(afapi, options)
-
     sys.exit(0)
 
 
@@ -225,26 +187,24 @@ def search_results(afapi,
 
 
 def print_exception(action, e):
-    print('%s:' % action, end='', file=sys.stderr)
+    print(f'{action}:', end='', file=sys.stderr)
     print(' "%s"' % e, file=sys.stderr)
 
 
 def print_status(action, r):
-    print('%s:' % action, end='', file=sys.stderr)
+    print(f'{action}:', end='', file=sys.stderr)
 
     if r.http_code is not None:
-        print(' %s' % r.http_code, end='', file=sys.stderr)
+        print(f' {r.http_code}', end='', file=sys.stderr)
     if r.http_reason is not None:
-        print(' %s' % r.http_reason, end='', file=sys.stderr)
+        print(f' {r.http_reason}', end='', file=sys.stderr)
 
     if r.http_headers is not None:
         # XXX
         content_type = r.http_headers.get('content-type')
-        if False and content_type is not None:
-            print(' %s' % content_type, end='', file=sys.stderr)
         length = r.http_headers.get('content-length')
         if length is not None:
-            print(' %s' % length, end='', file=sys.stderr)
+            print(f' {length}', end='', file=sys.stderr)
 
     if r.json is not None:
         if 'message' in r.json:
@@ -277,8 +237,7 @@ def print_status(action, r):
 
         if 'took' in r.json and r.json['took'] is not None:
             d = datetime.timedelta(milliseconds=r.json['took'])
-            print(' time=%s' % str(d)[:-3],
-                  end='', file=sys.stderr)
+            print(f' time={str(d)[:-3]}', end='', file=sys.stderr)
 
         if 'af_message' in r.json:
             print(' "%s"' % r.json['af_message'],
@@ -349,9 +308,8 @@ def process_arg(s, list=False):
         lines = sys.stdin.readlines()
     else:
         try:
-            f = open(s)
-            lines = f.readlines()
-            f.close()
+            with open(s) as f:
+                lines = f.readlines()
         except IOError:
             lines = [s]
 
@@ -359,8 +317,7 @@ def process_arg(s, list=False):
         print('lines:', lines, file=sys.stderr)
 
     if list:
-        l = [x.rstrip('\r\n') for x in lines]
-        return l
+        return [x.rstrip('\r\n') for x in lines]
 
     lines = ''.join(lines)
     return lines
@@ -414,82 +371,7 @@ def parse_opts():
         sys.exit(1)
 
     for opt, arg in opts:
-        if False:
-            pass
-        elif opt == '--sessions':
-            options['sessions'] = True
-        elif opt == '-A':
-            options['aggregate'] = True
-        elif opt == '-H':
-            options['histogram'] = True
-        elif opt == '--session':
-            options['session'] = arg
-        elif opt == '--samples':
-            options['samples'] = True
-        elif opt == '--sample-analysis':
-            options['sample_analysis'] = True
-        elif opt == '--top-tags':
-            options['top_tags'] = True
-        elif opt == '--tags':
-            options['tags'] = True
-        elif opt == '--tag':
-            options['tag'] = arg
-        elif opt == '--export':
-            options['export'] = True
-        elif opt == '-r':
-            options['json_requests'].append(process_arg(arg))
-        elif opt == '-n':
-            try:
-                options['num_results'] = int(arg)
-            except ValueError:
-                print('Invalid num:', arg, file=sys.stderr)
-                sys.exit(1)
-        elif opt == '--scope':
-            options['scope'] = arg
-        elif opt == '--hash':
-            x = process_arg(arg)
-            options['hash'] = x.rstrip('\r\n')
-        elif opt == '--terminal':
-            options['terminal'] = True
-        elif opt == '-K':
-            options['api_key'] = arg
-        elif opt == '-V':
-            options['api_version'] = arg
-        elif opt == '-h':
-            options['hostname'] = arg
-        elif opt == '--ssl':
-            if arg in ['verify', 'noverify']:
-                if arg == 'noverify':
-                    options['ssl'] = False
-                elif arg == 'verify':
-                    options['ssl'] = True
-            else:
-                print('Invalid --ssl option:', arg)
-                sys.exit(1)
-        elif opt == '-p':
-            options['print_python'] = True
-        elif opt == '-j':
-            options['print_json'] = True
-        elif opt == '-D':
-            if not options['debug'] < 3:
-                print('Maximum debug level is 3', file=sys.stderr)
-                sys.exit(1)
-            global debug
-            debug += 1
-            options['debug'] = debug
-        elif opt == '-t':
-            if arg:
-                options['panrc_tag'] = arg
-        elif opt == '-T':
-            options['timeout'] = arg
-        elif opt == '--version':
-            print('pan-python', pan.afapi.__version__)
-            sys.exit(0)
-        elif opt == '--help':
-            usage()
-            sys.exit(0)
-        else:
-            assert False, 'unhandled option %s' % opt
+        assert False, f'unhandled option {opt}'
 
     if options['json_requests']:
         obj = {}
@@ -497,9 +379,9 @@ def parse_opts():
             try:
                 x = json.loads(r)
             except ValueError as e:
-                print('%s: %s' % (e, r), file=sys.stderr)
+                print(f'{e}: {r}', file=sys.stderr)
                 sys.exit(1)
-            obj.update(x)
+            obj |= x
 
         try:
             options['json_request'] = json.dumps(obj)

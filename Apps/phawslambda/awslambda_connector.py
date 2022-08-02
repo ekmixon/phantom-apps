@@ -60,19 +60,16 @@ class AwsLambdaConnector(BaseConnector):
             return new_dict
 
         if isinstance(cur_obj, list):
-            new_list = []
-            for v in cur_obj:
-                new_list.append(self._sanitize_data(v))
-            return new_list
+            return [self._sanitize_data(v) for v in cur_obj]
 
         if isinstance(cur_obj, datetime):
             return cur_obj.strftime("%Y-%m-%d %H:%M:%S")
 
         if isinstance(cur_obj, bp.PageIterator):
-            new_dict = dict()
+            new_dict = {}
             try:
                 for page in cur_obj:
-                    new_dict.update(page)
+                    new_dict |= page
                 return new_dict
             except Exception as e:
                 return { 'error': e }
@@ -105,17 +102,13 @@ class AwsLambdaConnector(BaseConnector):
     def _handle_get_ec2_role(self):
 
         session = Session(region_name=self._region)
-        credentials = session.get_credentials()
-        return credentials
+        return session.get_credentials()
 
     def _create_client(self, action_result, param):
 
-        boto_config = None
-        if self._proxy:
-            boto_config = Config(proxies=self._proxy)
-
+        boto_config = Config(proxies=self._proxy) if self._proxy else None
         # Try getting and using temporary assume role credentials from parameters
-        temp_credentials = dict()
+        temp_credentials = {}
         if param and 'credentials' in param:
             try:
                 temp_credentials = ast.literal_eval(param['credentials'])
@@ -188,8 +181,6 @@ class AwsLambdaConnector(BaseConnector):
         client_context = param.get('client_context')
         payload = param.get('payload')
         qualifier = param.get('qualifier')
-        empty_payload = False
-
         args = {
             'FunctionName': function_name
         }
@@ -207,9 +198,7 @@ class AwsLambdaConnector(BaseConnector):
         if qualifier:
             args['Qualifier'] = qualifier
 
-        if invocation_type == 'Event' or invocation_type == 'DryRun':
-            empty_payload = True
-
+        empty_payload = invocation_type in ['Event', 'DryRun']
         # make boto3 call
         ret_val, response = self._make_boto_call(action_result, 'invoke', False, empty_payload, **args)
 
@@ -258,7 +247,7 @@ class AwsLambdaConnector(BaseConnector):
             return action_result.get_status()
 
         if response.get('error', None) is not None:
-            return action_result.set_status(phantom.APP_ERROR, "{}".format(response.get('error')))
+            return action_result.set_status(phantom.APP_ERROR, f"{response.get('error')}")
 
         # Add the response into the data section
         action_result.add_data(response)
@@ -419,10 +408,11 @@ class AwsLambdaConnector(BaseConnector):
         self._access_key = config.get(LAMBDA_JSON_ACCESS_KEY)
         self._secret_key = config.get(LAMBDA_JSON_SECRET_KEY)
 
-        if not (self._access_key and self._secret_key):
-            return self.set_status(phantom.APP_ERROR, LAMBDA_BAD_ASSET_CONFIG_MSG)
-
-        return phantom.APP_SUCCESS
+        return (
+            phantom.APP_SUCCESS
+            if (self._access_key and self._secret_key)
+            else self.set_status(phantom.APP_ERROR, LAMBDA_BAD_ASSET_CONFIG_MSG)
+        )
 
     def finalize(self):
 
@@ -457,26 +447,24 @@ if __name__ == '__main__':
         password = getpass.getpass("Password: ")
 
     if username and password:
-        login_url = BaseConnector._get_phantom_base_url() + "login"
+        login_url = f"{BaseConnector._get_phantom_base_url()}login"
         try:
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

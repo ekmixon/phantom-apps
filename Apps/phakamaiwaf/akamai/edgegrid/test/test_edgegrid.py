@@ -66,11 +66,13 @@ class EdgeGridTest(unittest.TestCase):
 
         request = requests.Request(
             method=self.testcase['request']['method'],
-            url=urljoin(self.testdata['base_url'],self.testcase['request']['path']),   
+            url=urljoin(
+                self.testdata['base_url'], self.testcase['request']['path']
+            ),
             headers=headers,
-            data=self.testcase['request'].get('data') if self.testcase['request'].get('data') \
-                                                      else None
+            data=self.testcase['request'].get('data') or None,
         )
+
 
         try:
             auth_header = auth.make_auth_header(
@@ -85,12 +87,10 @@ class EdgeGridTest(unittest.TestCase):
 
 class EGSimpleTest(unittest.TestCase):
     def test_nonce(self):
-        count = 100
         nonces = set()
-        while count > 0:
+        for _ in range(100, 0, -1):
             n = eg.new_nonce()
             self.assertNotIn(n, nonces)
-            count -= 1
 
     def test_timestamp(self):
         valid_timestamp = re.compile(r"""
@@ -232,7 +232,7 @@ class JsonTest(unittest.TestCase):
 
 def suite():
     suite = unittest.TestSuite()
-    with open("%s/testdata.json" % mydir) as testdata:
+    with open(f"{mydir}/testdata.json") as testdata:
         testdata = json.load(testdata)
 
     tests = testdata['tests']

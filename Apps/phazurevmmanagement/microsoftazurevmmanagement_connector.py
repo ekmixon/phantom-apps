@@ -62,7 +62,7 @@ def _load_app_state(asset_id, app_connector=None):
     app_dir = os.path.dirname(os.path.abspath(__file__))
     state_file = '{0}/{1}_state.json'.format(app_dir, asset_id)
     real_state_file_path = os.path.abspath(state_file)
-    if not os.path.dirname(real_state_file_path) == app_dir:
+    if os.path.dirname(real_state_file_path) != app_dir:
         if app_connector:
             app_connector.debug_print('In _load_app_state: Invalid asset_id')
         return {}
@@ -101,7 +101,7 @@ def _save_app_state(state, asset_id, app_connector):
     state_file = '{0}/{1}_state.json'.format(app_dir, asset_id)
 
     real_state_file_path = os.path.abspath(state_file)
-    if not os.path.dirname(real_state_file_path) == app_dir:
+    if os.path.dirname(real_state_file_path) != app_dir:
         if app_connector:
             app_connector.debug_print('In _save_app_state: Invalid asset_id')
         return {}
@@ -127,7 +127,12 @@ def _handle_login_response(request):
 
     asset_id = request.GET.get('state')
     if not asset_id:
-        return HttpResponse('ERROR: Asset ID not found in URL\n{}'.format(json.dumps(request.GET)), content_type="text/plain", status=400)
+        return HttpResponse(
+            f'ERROR: Asset ID not found in URL\n{json.dumps(request.GET)}',
+            content_type="text/plain",
+            status=400,
+        )
+
 
     # Check for error in URL
     error = request.GET.get('error')
@@ -151,11 +156,7 @@ def _handle_login_response(request):
 
     # If value of admin_consent is available
     if admin_consent:
-        if admin_consent == 'True':
-            admin_consent = True
-        else:
-            admin_consent = False
-
+        admin_consent = admin_consent == 'True'
         state['admin_consent'] = admin_consent
         _save_app_state(state, asset_id, None)
 
@@ -200,7 +201,7 @@ def _handle_rest_request(request, path_parts):
             app_dir = os.path.dirname(os.path.abspath(__file__))
             auth_status_file_path = '{0}/{1}_{2}'.format(app_dir, asset_id, TC_FILE)
             real_auth_status_file_path = os.path.abspath(auth_status_file_path)
-            if not os.path.dirname(real_auth_status_file_path) == app_dir:
+            if os.path.dirname(real_auth_status_file_path) != app_dir:
                 return HttpResponse("Error: Invalid asset_id", content_type="text/plain", status=400)
             open(auth_status_file_path, 'w').close()
             try:
@@ -262,7 +263,7 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
         :return: status phantom.APP_ERROR/phantom.APP_SUCCESS(along with appropriate message)
         """
 
-        if response.status_code == 200 or response.status_code == 202:
+        if response.status_code in [200, 202]:
             return RetVal(phantom.APP_SUCCESS, {})
 
         return RetVal(action_result.set_status(phantom.APP_ERROR, "Empty response and no information in the header"),
@@ -439,9 +440,17 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
             return ret_val, None
 
         asset_name = resp_json.get('name')
-        if not asset_name:
-            return action_result.set_status(phantom.APP_ERROR, 'Asset Name for id: {0} not found.'.format(asset_id)), None
-        return phantom.APP_SUCCESS, asset_name
+        return (
+            (phantom.APP_SUCCESS, asset_name)
+            if asset_name
+            else (
+                action_result.set_status(
+                    phantom.APP_ERROR,
+                    'Asset Name for id: {0} not found.'.format(asset_id),
+                ),
+                None,
+            )
+        )
 
     def _get_phantom_base_url_vmazure(self, action_result):
         """ Get base url of phantom.
@@ -457,9 +466,16 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
             return ret_val, None
 
         phantom_base_url = resp_json.get('base_url')
-        if not phantom_base_url:
-            return action_result.set_status(phantom.APP_ERROR, MS_AZURE_BASE_URL_NOT_FOUND_MSG), None
-        return phantom.APP_SUCCESS, phantom_base_url
+        return (
+            (phantom.APP_SUCCESS, phantom_base_url)
+            if phantom_base_url
+            else (
+                action_result.set_status(
+                    phantom.APP_ERROR, MS_AZURE_BASE_URL_NOT_FOUND_MSG
+                ),
+                None,
+            )
+        )
 
     def _get_app_rest_url(self, action_result):
         """ Get URL for making rest calls.
@@ -576,9 +592,13 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
         :return: status success/failure
         """
 
-        # Create the url authorization, this is the one pointing to the oauth server side
-        admin_consent_url = "https://login.microsoftonline.com/{0}/adminconsent".format(self._tenant)
-        admin_consent_url += "?client_id={0}".format(self._client_id)
+        admin_consent_url = (
+            "https://login.microsoftonline.com/{0}/adminconsent".format(
+                self._tenant
+            )
+            + "?client_id={0}".format(self._client_id)
+        )
+
         admin_consent_url += "&redirect_uri={0}".format(app_state['redirect_uri'])
         admin_consent_url += "&state={0}".format(self.get_asset_id())
 
@@ -603,7 +623,7 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
 
         self.save_progress('Waiting for authorization to complete')
 
-        for i in range(0, 40):
+        for i in range(40):
 
             self.send_progress('{0}'.format('.' * (i % 10)))
 
@@ -672,8 +692,12 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
                 if (phantom.is_fail(result)):
                     return self.get_status()
 
-            admin_consent_url = "https://login.microsoftonline.com/{0}/oauth2/v2.0/authorize".format(self._tenant)
-            admin_consent_url += "?client_id={0}".format(self._client_id)
+            admin_consent_url = "https://login.microsoftonline.com/{0}/oauth2/v2.0/authorize".format(
+                self._tenant
+            ) + "?client_id={0}".format(
+                self._client_id
+            )
+
             admin_consent_url += "&redirect_uri={0}".format(redirect_uri)
             admin_consent_url += "&state={0}".format(self.get_asset_id())
             admin_consent_url += "&scope={0}".format(MS_AZURE_CODE_GENERATION_SCOPE)
@@ -700,7 +724,7 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
 
             self.save_progress('Waiting for authorization to complete')
 
-            for i in range(0, 40):
+            for i in range(40):
 
                 self.send_progress('{0}'.format('.' * (i % 10)))
 
@@ -787,9 +811,9 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
 
         action_result = self.add_action_result(ActionResult(dict(param)))
 
-        resource_group_name = self._handle_py_ver_compat_for_input_str(param.get('resource_group_name'))
-
-        if resource_group_name:
+        if resource_group_name := self._handle_py_ver_compat_for_input_str(
+            param.get('resource_group_name')
+        ):
             endpoint = VM_LIST_VMS_RESOURCE_GROUP_ENDPOINT.format(resourceGroupName=resource_group_name)
         else:
             endpoint = VM_LIST_VMS_ALL_ENDPOINT
@@ -1021,18 +1045,9 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
         action_result = self.add_action_result(ActionResult(dict(param)))
 
         tag_name = self._handle_py_ver_compat_for_input_str(param.get('tag_name'))
-        tag_value = self._handle_py_ver_compat_for_input_str(param.get('tag_value'))
-
-        # If not tag_value, then create tag_name
-        if not tag_value:
-            ret_val, response = self.create_tag_name(action_result, tag_name)
-
-            if (phantom.is_fail(ret_val)):
-                return action_result.get_status()
-
-            # Add the response into the data section
-            action_result.add_data(response)
-        else:
+        if tag_value := self._handle_py_ver_compat_for_input_str(
+            param.get('tag_value')
+        ):
             # Check if you're creating a new name=value pair, or updating the value of an already existing tag name
             value = VM_CREATE_TAG_VALUE_PART.format(tagValue=tag_value)
             endpoint = VM_CREATE_TAG_ENDPOINT.format(tagName=tag_name, tagValue=value)
@@ -1059,6 +1074,14 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
             # Add the response into the data section
             action_result.add_extra_data(response)
 
+        else:
+            ret_val, response = self.create_tag_name(action_result, tag_name)
+
+            if (phantom.is_fail(ret_val)):
+                return action_result.get_status()
+
+            # Add the response into the data section
+            action_result.add_data(response)
         # Add a dictionary that is made up of the most important values from data into the summary
         summary = action_result.update_summary({})
         summary['status'] = "Successfully created tag"
@@ -1114,9 +1137,9 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
         # Add an action result object to self (BaseConnector) to represent the action for this param
         action_result = self.add_action_result(ActionResult(dict(param)))
 
-        resource_group_name = self._handle_py_ver_compat_for_input_str(param.get('resource_group_name'))
-
-        if resource_group_name:
+        if resource_group_name := self._handle_py_ver_compat_for_input_str(
+            param.get('resource_group_name')
+        ):
             resource_part = VM_RESOURCE_GROUP_VALUE_PART.format(resourceGroupName=resource_group_name)
             endpoint = VM_LIST_SNAPSHOTS_ENDPOINT.format(resourceValue=resource_part)
         else:
@@ -1205,7 +1228,12 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
         resource_guid = param.get('resource_guid')
         security_rules = param.get('security_rules')
 
-        endpoint = VM_SECURITY_GROUP_ENDPOINT.format(resourceGroupName=resource_group_name, groupType='networkSecurityGroups', groupName='/{}'.format(group_name))
+        endpoint = VM_SECURITY_GROUP_ENDPOINT.format(
+            resourceGroupName=resource_group_name,
+            groupType='networkSecurityGroups',
+            groupName=f'/{group_name}',
+        )
+
         body = {
             "location": location,
             "properties": {},
@@ -1264,7 +1292,12 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
         location = param.get('location')
         tags = param.get('tags')
 
-        endpoint = VM_SECURITY_GROUP_ENDPOINT.format(resourceGroupName=resource_group_name, groupType='applicationSecurityGroups', groupName='/{}'.format(group_name))
+        endpoint = VM_SECURITY_GROUP_ENDPOINT.format(
+            resourceGroupName=resource_group_name,
+            groupType='applicationSecurityGroups',
+            groupName=f'/{group_name}',
+        )
+
         body = {
             "location": location,
             "tags": {}
@@ -1309,10 +1342,13 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
         # Add an action result object to self (BaseConnector) to represent the action for this param
         action_result = self.add_action_result(ActionResult(dict(param)))
 
-        resource_group_name = self._handle_py_ver_compat_for_input_str(param.get('resource_group_name'))
+        if resource_group_name := self._handle_py_ver_compat_for_input_str(
+            param.get('resource_group_name')
+        ):
+            endpoint = VM_LIST_VIRTUAL_NETWORKS_ENDPOINT.format(
+                resourceGroup=f'/resourceGroups/{resource_group_name}'
+            )
 
-        if resource_group_name:
-            endpoint = VM_LIST_VIRTUAL_NETWORKS_ENDPOINT.format(resourceGroup='/resourceGroups/{}'.format(resource_group_name))
         else:
             endpoint = VM_LIST_VIRTUAL_NETWORKS_ENDPOINT.format(resourceGroup='')
 
@@ -1586,16 +1622,15 @@ class MicrosoftAzureVmManagementConnector(BaseConnector):
         if self._admin_consent:
             # add the resource that is to be accessed for the non-interactive OAuth
             data['resource'] = 'https://management.azure.com/'
+        elif from_action or self._state.get('token', {}).get('refresh_token', None) is not None:
+            data['refresh_token'] = self._state.get('token').get('refresh_token')
+            data['grant_type'] = 'refresh_token'
+        elif self._state.get('code'):
+            data['redirect_uri'] = self._state.get('redirect_uri')
+            data['code'] = self._state.get('code')
+            data['grant_type'] = 'authorization_code'
         else:
-            if from_action or self._state.get('token', {}).get('refresh_token', None) is not None:
-                data['refresh_token'] = self._state.get('token').get('refresh_token')
-                data['grant_type'] = 'refresh_token'
-            elif self._state.get('code'):
-                data['redirect_uri'] = self._state.get('redirect_uri')
-                data['code'] = self._state.get('code')
-                data['grant_type'] = 'authorization_code'
-            else:
-                return action_result.set_status(phantom.APP_ERROR, "Unexpected details retrieved from the state file. Please run test connectivity first")
+            return action_result.set_status(phantom.APP_ERROR, "Unexpected details retrieved from the state file. Please run test connectivity first")
 
         ret_val, resp_json = self._make_rest_call(req_url, action_result, headers=headers, data=data, method='post')
 
@@ -1791,7 +1826,7 @@ if __name__ == '__main__':
 
     if (args.username and args.password):
         try:
-            login_url = BaseConnector._get_phantom_base_url() + 'login'
+            login_url = f'{BaseConnector._get_phantom_base_url()}login'
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']

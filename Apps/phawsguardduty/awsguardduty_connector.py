@@ -113,12 +113,9 @@ class AwsGuarddutyConnector(BaseConnector):
 
     def _create_client(self, action_result, param=None):
 
-        boto_config = None
-        if self._proxy:
-            boto_config = Config(proxies=self._proxy)
-
+        boto_config = Config(proxies=self._proxy) if self._proxy else None
         # Try getting and using temporary assume role credentials from parameters
-        temp_credentials = dict()
+        temp_credentials = {}
         if param and 'credentials' in param:
             try:
                 temp_credentials = ast.literal_eval(param['credentials'])
@@ -128,8 +125,10 @@ class AwsGuarddutyConnector(BaseConnector):
 
                 self.save_progress("Using temporary assume role credentials for action")
             except Exception as e:
-                return action_result.set_status(phantom.APP_ERROR,
-                                                "Failed to get temporary credentials: {}".format(e))
+                return action_result.set_status(
+                    phantom.APP_ERROR, f"Failed to get temporary credentials: {e}"
+                )
+
 
         try:
             if self._access_key and self._secret_key:
@@ -163,16 +162,10 @@ class AwsGuarddutyConnector(BaseConnector):
             pass
 
         if isinstance(cur_obj, dict):
-            new_dict = {}
-            for k, v in cur_obj.items():
-                new_dict[k] = self._sanitize_dates(v)
-            return new_dict
+            return {k: self._sanitize_dates(v) for k, v in cur_obj.items()}
 
         if isinstance(cur_obj, list):
-            new_list = []
-            for v in cur_obj:
-                new_list.append(self._sanitize_dates(v))
-            return new_list
+            return [self._sanitize_dates(v) for v in cur_obj]
 
         if isinstance(cur_obj, datetime):
             return cur_obj.strftime("%Y-%m-%d %H:%M:%S")
@@ -209,10 +202,11 @@ class AwsGuarddutyConnector(BaseConnector):
         :return: container_id
         """
 
-        container_dict = {}
-        container_dict['name'] = finding['Title']
-        container_dict['source_data_identifier'] = finding['Id']
-        container_dict['description'] = finding['Description']
+        container_dict = {
+            'name': finding['Title'],
+            'source_data_identifier': finding['Id'],
+            'description': finding['Description'],
+        }
 
         container_creation_status, container_creation_msg, container_id = self.save_container(container=container_dict)
 
@@ -231,11 +225,12 @@ class AwsGuarddutyConnector(BaseConnector):
         :return: status(success/failure), message
         """
 
-        artifact = {}
-        artifact['name'] = 'Finding Artifact'
-        artifact['container_id'] = container_id
-        artifact['source_data_identifier'] = finding['Id']
-        artifact['cef'] = finding
+        artifact = {
+            'name': 'Finding Artifact',
+            'container_id': container_id,
+            'source_data_identifier': finding['Id'],
+            'cef': finding,
+        }
 
         create_artifact_status, create_artifact_msg, _ = self.save_artifacts([artifact])
 
@@ -244,7 +239,7 @@ class AwsGuarddutyConnector(BaseConnector):
 
         return phantom.APP_SUCCESS, AWSGUARDDUTY_CREATE_ARTIFACT_MSG
 
-    def _handle_on_poll(self, param):  # noqa: C901
+    def _handle_on_poll(self, param):    # noqa: C901
         """ This function is used to handle on_poll.
 
         :param param: Dictionary of input parameters
@@ -298,7 +293,7 @@ class AwsGuarddutyConnector(BaseConnector):
             detector_id = self._state.get('detector_id')
 
         # Fetching the filter details
-        finding_criteria = dict()
+        finding_criteria = {}
         if filter_name:
             ret_val, response = self._make_boto_call(action_result, 'get_filter', DetectorId=detector_id, FilterName=filter_name)
 
@@ -335,7 +330,7 @@ class AwsGuarddutyConnector(BaseConnector):
 
         self.save_progress('Ingesting data')
 
-        all_findings = list()
+        all_findings = []
 
         # Fetches the details of finding in a bunch of 50 findings
         while list_findings:
@@ -362,11 +357,14 @@ class AwsGuarddutyConnector(BaseConnector):
 
                     # Parse S3 bucket details
                     try:
-                        s3BucketDetails_list = finding['Resource']['S3BucketDetails']
-                        if s3BucketDetails_list:
-                            s3BucketDetails_dict = {}
-                            for element in s3BucketDetails_list:
-                                s3BucketDetails_dict[element['Arn']] = element
+                        if s3BucketDetails_list := finding['Resource'][
+                            'S3BucketDetails'
+                        ]:
+                            s3BucketDetails_dict = {
+                                element['Arn']: element
+                                for element in s3BucketDetails_list
+                            }
+
                             finding['Resource']['S3BucketDetails'] = s3BucketDetails_dict
                     except:
                         continue
@@ -397,7 +395,10 @@ class AwsGuarddutyConnector(BaseConnector):
             if phantom.is_fail(artifacts_creation_status):
                 self.debug_print('{}. {error_msg}'.format(AWSGUARDDUTY_CREATE_ARTIFACT_ERR_MSG.format(container_id=container_id), error_msg=artifacts_creation_msg))
 
-        self.save_progress('Total findings available on the UI of AWS GuardDuty: {}'.format(len(all_findings)))
+        self.save_progress(
+            f'Total findings available on the UI of AWS GuardDuty: {len(all_findings)}'
+        )
+
 
         return action_result.set_status(phantom.APP_SUCCESS)
 
@@ -452,7 +453,7 @@ class AwsGuarddutyConnector(BaseConnector):
         ret_val, valid_findings_ids = self._validate_findings_id(finding_ids, None, action_result, detector_id)
         if not ret_val:
             return action_result.get_status()
-        self.debug_print("Valid finding IDs are: \n{}".format(valid_findings_ids))
+        self.debug_print(f"Valid finding IDs are: \n{valid_findings_ids}")
 
         comments = param.get('comment')
         while valid_findings_ids:
@@ -509,15 +510,17 @@ class AwsGuarddutyConnector(BaseConnector):
                 for finding in res.get('Findings'):
                     if not valid_id_found:
                         valid_id_found = True
-                    finding_details = finding.get('Service')
-                    if finding_details:
+                    if finding_details := finding.get('Service'):
                         is_archived = finding_details.get('Archived')
                     else:
-                        self.debug_print("No finding details for finding ID: {}".format(finding['Id']))
+                        self.debug_print(f"No finding details for finding ID: {finding['Id']}")
                         continue
 
                     if (is_archived and record_state == 'ARCHIVED') or (not is_archived and record_state == 'UNARCHIVED'):
-                        self.debug_print("The finding ID {} is already in {}".format(finding['Id'], record_state))
+                        self.debug_print(
+                            f"The finding ID {finding['Id']} is already in {record_state}"
+                        )
+
                         continue
                     valid_finding_ids.append(finding['Id'])
 
@@ -555,7 +558,7 @@ class AwsGuarddutyConnector(BaseConnector):
             return action_result.set_status(phantom.APP_ERROR, AWSGUARDDUTY_INVALID_FINDING_ID_ERR_MSG)
 
         ret_val, valid_findings_ids = self._validate_findings_id(finding_ids, 'ARCHIVED', action_result, detector_id)
-        self.debug_print("Valid finding IDs are: \n{}".format(valid_findings_ids))
+        self.debug_print(f"Valid finding IDs are: \n{valid_findings_ids}")
         if not ret_val:
             return action_result.get_status()
 
@@ -599,7 +602,7 @@ class AwsGuarddutyConnector(BaseConnector):
         ret_val, valid_findings_ids = self._validate_findings_id(finding_ids, 'UNARCHIVED', action_result, detector_id)
         if not ret_val:
             return action_result.get_status()
-        self.debug_print("Valid finding IDs are: \n{}".format(valid_findings_ids))
+        self.debug_print(f"Valid finding IDs are: \n{valid_findings_ids}")
 
         while valid_findings_ids:
             ret_val, response = self._make_boto_call(action_result, 'unarchive_findings', DetectorId=detector_id, FindingIds=valid_findings_ids[:min(50, len(valid_findings_ids))])
@@ -621,7 +624,7 @@ class AwsGuarddutyConnector(BaseConnector):
         Handles the pagination
         """
 
-        list_items = list()
+        list_items = []
         next_token = None
         dic_map = {
             'list_filters': ['FilterNames'],
@@ -738,40 +741,26 @@ class AwsGuarddutyConnector(BaseConnector):
         }
 
         if instance_id:
-            criterion.update({
-                'resource.instanceDetails.instanceId': {
-                    'Eq': [
-                        instance_id
-                    ]
-                }
-            })
+            criterion['resource.instanceDetails.instanceId'] = {
+                'Eq': [instance_id]
+            }
+
 
         if severity:
-            criterion.update({
-                'severity': {
-                    'Eq': [
-                        severity
-                    ]
-                }
-            })
+            criterion['severity'] = {'Eq': [severity]}
+
 
         if public_ip:
-            criterion.update({
-                'resource.instanceDetails.networkInterfaces.publicIp': {
-                    'Eq': [
-                        public_ip
-                    ]
-                }
-            })
+            criterion['resource.instanceDetails.networkInterfaces.publicIp'] = {
+                'Eq': [public_ip]
+            }
+
 
         if private_ip:
-            criterion.update({
-                'resource.instanceDetails.networkInterfaces.privateIpAddresses.privateIpAddress': {
-                    'Eq': [
-                        private_ip
-                    ]
-                }
-            })
+            criterion[
+                'resource.instanceDetails.networkInterfaces.privateIpAddresses.privateIpAddress'
+            ] = {'Eq': [private_ip]}
+
 
         kwargs = {'DetectorId': detector_id, 'FindingCriteria': finding_criteria}
 
@@ -956,7 +945,7 @@ class AwsGuarddutyConnector(BaseConnector):
         action = self.get_action_identifier()
         action_execution_status = phantom.APP_SUCCESS
 
-        if action in action_mapping.keys():
+        if action in action_mapping:
             action_function = action_mapping[action]
             action_execution_status = action_function(param)
 
@@ -965,8 +954,7 @@ class AwsGuarddutyConnector(BaseConnector):
     def _handle_get_ec2_role(self):
 
         session = Session(region_name=self._region)
-        credentials = session.get_credentials()
-        return credentials
+        return session.get_credentials()
 
     def initialize(self):
 
@@ -1050,25 +1038,23 @@ if __name__ == '__main__':
 
     if (username and password):
         try:
-            login_url = BaseConnector._get_phantom_base_url() + '/login'
+            login_url = f'{BaseConnector._get_phantom_base_url()}/login'
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platform. Error: {}".format(str(e)))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

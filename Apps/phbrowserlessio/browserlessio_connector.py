@@ -57,7 +57,13 @@ class BrowserlessIoConnector(BaseConnector):
         if 200 <= status_code < 399:
             # Send contents to Function
             return RetVal(action_result.set_status(phantom.APP_SUCCESS), self._handle_py_ver_compat_for_input_str(r.content))
-        return RetVal(action_result.set_status(phantom.APP_ERROR, "Status code: {}. Unable to extract files".format(status_code)), None)
+        return RetVal(
+            action_result.set_status(
+                phantom.APP_ERROR,
+                f"Status code: {status_code}. Unable to extract files",
+            ),
+            None,
+        )
 
     def _process_json_response(self, r, action_result):
         # Try a json parse
@@ -115,7 +121,7 @@ class BrowserlessIoConnector(BaseConnector):
     def _make_rest_call(self, endpoint, action_result, method="post", **kwargs):
         # **kwargs can be any additional parameters that requests.request accepts
 
-        params = dict()
+        params = {}
         resp_json = None
 
         try:
@@ -255,11 +261,15 @@ class BrowserlessIoConnector(BaseConnector):
         printbackground = param.get('printbackground', False)
         landscape = param.get('landscape', False)
         followRefresh = param.get('followrefresh', True)
-        query = {"url": s_url, "options": {
-            "displayHeaderFooter": "{}".format(headerfooter),
-            "printBackground": "{}".format(printbackground),
-            "landscape": "{}".format(landscape)
-        }}
+        query = {
+            "url": s_url,
+            "options": {
+                "displayHeaderFooter": f"{headerfooter}",
+                "printBackground": f"{printbackground}",
+                "landscape": f"{landscape}",
+            },
+        }
+
         if followRefresh:
             query["gotoOptions"] = {"waitUntil": "networkidle2"}
 
@@ -269,7 +279,7 @@ class BrowserlessIoConnector(BaseConnector):
         if phantom.is_fail(ret_val):
             return action_result.get_status()
         try:
-            file_name = "{}_screenshot.pdf".format(s_url)
+            file_name = f"{s_url}_screenshot.pdf"
             if hasattr(Vault, 'create_attachment'):
                 vault_ret = Vault.create_attachment(response, self.get_container_id(), file_name=file_name)
             else:
@@ -277,7 +287,7 @@ class BrowserlessIoConnector(BaseConnector):
                     temp_dir = Vault.get_vault_tmp_dir()
                 else:
                     temp_dir = '/opt/phantom/vault/tmp'
-                temp_dir = '{}/{}'.format(temp_dir, hashlib.md5(file_name).hexdigest())
+                temp_dir = f'{temp_dir}/{hashlib.md5(file_name).hexdigest()}'
                 os.makedirs(temp_dir)
                 file_path = os.path.join(temp_dir, 'tmpfile')
                 with open(file_path, 'wb') as f:
@@ -311,7 +321,7 @@ class BrowserlessIoConnector(BaseConnector):
         if phantom.is_fail(ret_val):
             return action_result.get_status()
         try:
-            file_name = "{}_contents.txt".format(s_url)
+            file_name = f"{s_url}_contents.txt"
             if hasattr(Vault, 'create_attachment'):
                 vault_ret = Vault.create_attachment(response, self.get_container_id(), file_name=file_name)
             else:
@@ -319,7 +329,7 @@ class BrowserlessIoConnector(BaseConnector):
                     temp_dir = Vault.get_vault_tmp_dir()
                 else:
                     temp_dir = '/opt/phantom/vault/tmp'
-                temp_dir = '{}/{}'.format(temp_dir, hashlib.md5(file_name).hexdigest())
+                temp_dir = f'{temp_dir}/{hashlib.md5(file_name).hexdigest()}'
                 os.makedirs(temp_dir)
                 file_path = os.path.join(temp_dir, 'tmpfile')
                 with open(file_path, 'wb') as f:
@@ -353,15 +363,20 @@ class BrowserlessIoConnector(BaseConnector):
         fullpage = param.get('fullpage', True)
         followRefresh = param.get('followrefresh', True)
 
-        jpeg_query = {"url": s_url, "options": {
-            "type": ftype,
-            "quality": "{}".format(quality),
-            "fullPage": "{}".format(fullpage)
-        }}
-        png_query = {"url": s_url, "options": {
-            "type": ftype,
-            "fullPage": "{}".format(fullpage)
-        }}
+        jpeg_query = {
+            "url": s_url,
+            "options": {
+                "type": ftype,
+                "quality": f"{quality}",
+                "fullPage": f"{fullpage}",
+            },
+        }
+
+        png_query = {
+            "url": s_url,
+            "options": {"type": ftype, "fullPage": f"{fullpage}"},
+        }
+
 
         if ftype == "png":
             query = png_query
@@ -378,7 +393,7 @@ class BrowserlessIoConnector(BaseConnector):
         if phantom.is_fail(ret_val):
             return action_result.get_status()
         try:
-            file_name = "{}_screenshot.{}".format(s_url, ftype)
+            file_name = f"{s_url}_screenshot.{ftype}"
             if hasattr(Vault, 'create_attachment'):
                 vault_ret = Vault.create_attachment(response, self.get_container_id(), file_name=file_name)
             else:
@@ -386,7 +401,7 @@ class BrowserlessIoConnector(BaseConnector):
                     temp_dir = Vault.get_vault_tmp_dir()
                 else:
                     temp_dir = '/opt/phantom/vault/tmp'
-                temp_dir = '{}/{}'.format(temp_dir, hashlib.md5(file_name).hexdigest())
+                temp_dir = f'{temp_dir}/{hashlib.md5(file_name).hexdigest()}'
                 os.makedirs(temp_dir)
                 file_path = os.path.join(temp_dir, 'tmpfile')
                 with open(file_path, 'wb') as f:
@@ -410,7 +425,7 @@ class BrowserlessIoConnector(BaseConnector):
         # Get the action that we are supposed to execute for this App Run
         action_id = self.get_action_identifier()
 
-        self.debug_print("action_id: {}".format(self.get_action_identifier()))
+        self.debug_print(f"action_id: {self.get_action_identifier()}")
 
         if action_id == 'test_connectivity':
             ret_val = self._handle_test_connectivity(param)
@@ -477,26 +492,24 @@ def main():
 
     if username and password:
         try:
-            login_url = BrowserlessIoConnector._get_phantom_base_url() + '/login'
+            login_url = f'{BrowserlessIoConnector._get_phantom_base_url()}/login'
 
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

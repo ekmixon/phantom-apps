@@ -80,12 +80,11 @@ class AirWatchConnector(BaseConnector):
 
     def _get_headers(self):
         self.save_progress('Trying to get headers')
-        # Creating headers
-        headers = dict()
-        headers['aw-tenant-code'] = self._tenant
-        headers['Accept'] = "application/json;version=2"
-        headers['Content-Type'] = "application/json"
-        return headers
+        return {
+            'aw-tenant-code': self._tenant,
+            'Accept': "application/json;version=2",
+            'Content-Type': "application/json",
+        }
 
     def _build_groupadd_body(self, param):
         self.save_progress('Trying to build body to add a device into the group')
@@ -115,11 +114,11 @@ class AirWatchConnector(BaseConnector):
 
             # Trying to build body to add a device into the group
             body = self._build_groupadd_body(param)
-            self.save_progress("Body: {}".format(body))
+            self.save_progress(f"Body: {body}")
 
             # Trying to build URL to add a device into the group
             url = self._build_groupadd_url(param)
-            self.save_progress("URL: {}".format(url))
+            self.save_progress(f"URL: {url}")
 
             # Fetching the action parameters
             device_id = param.get('device_uuid')
@@ -129,16 +128,17 @@ class AirWatchConnector(BaseConnector):
             try:
                 response = requests.patch(url, data=body, headers=headers, auth=(self._username, self._password), verify=False)
             except requests.exceptions.InvalidSchema:
-                error_message = 'Error connecting to server. No connection adapters were found for %s' % (url)
+                error_message = f'Error connecting to server. No connection adapters were found for {url}'
+
                 return action_result.set_status(phantom.APP_ERROR, error_message)
             except requests.exceptions.InvalidURL:
-                error_message = 'Error connecting to server. Invalid URL %s' % (url)
+                error_message = f'Error connecting to server. Invalid URL {url}'
                 return action_result.set_status(phantom.APP_ERROR, error_message)
             except Exception as e:
                 return action_result.set_status(phantom.APP_ERROR, "Error Connecting to server. {0}".format(self._get_error_message_from_exception(e)))
 
             # Parsing the response
-            self.save_progress("Status code: {}".format(response.status_code))
+            self.save_progress(f"Status code: {response.status_code}")
             json_response = json.loads(response.text)
 
             # Checking the response
@@ -151,7 +151,8 @@ class AirWatchConnector(BaseConnector):
                 return action_result.set_status(phantom.APP_ERROR, error_msg)
 
         except Exception as e:
-            error_msg = "Error occurred while adding a device into the group. {}".format(self._get_error_message_from_exception(e))
+            error_msg = f"Error occurred while adding a device into the group. {self._get_error_message_from_exception(e)}"
+
             self.save_progress(error_msg)
             return action_result.set_status(phantom.APP_ERROR, error_msg)
 

@@ -6,13 +6,11 @@
 
 def _get_ctx_result(result, provides):
 
-    ctx_result = {}
-
     param = result.get_param()
     summary = result.get_summary()
     data = result.get_data()
 
-    ctx_result['param'] = param
+    ctx_result = {'param': param}
     if summary:
         ctx_result['summary'] = summary
 
@@ -38,10 +36,8 @@ def display_tickets(provides, all_app_runs, context):
 
     for summary, action_results in all_app_runs:
         for result in action_results:
-            ctx_result = _get_ctx_result(result, provides)
-            if not ctx_result:
-                continue
-            results.append(ctx_result)
+            if ctx_result := _get_ctx_result(result, provides):
+                results.append(ctx_result)
 
     return 'bmcremedy_display_tickets.html'
 
@@ -52,10 +48,8 @@ def create_ticket(provides, all_app_runs, context):
 
     for summary, action_results in all_app_runs:
         for result in action_results:
-            ctx_result = _get_ctx_result(result, provides)
-            if not ctx_result:
-                continue
-            results.append(ctx_result)
+            if ctx_result := _get_ctx_result(result, provides):
+                results.append(ctx_result)
 
     return 'bmcremedy_create_ticket.html'
 
@@ -66,9 +60,7 @@ def display_ticket_details(provides, all_app_runs, context):
 
     for summary, action_results in all_app_runs:
         for result in action_results:
-            ctx_result = _get_ctx_result(result, provides)
-            if not ctx_result:
-                continue
-            results.append(ctx_result)
+            if ctx_result := _get_ctx_result(result, provides):
+                results.append(ctx_result)
 
     return 'bmcremedy_display_ticket_details.html'

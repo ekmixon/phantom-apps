@@ -98,7 +98,8 @@ class AwsIamConnector(BaseConnector):
         if response.status_code == 200:
             return RetVal(phantom.APP_SUCCESS, {})
 
-        error_msg = "Status code: {}. Empty response and no information in the header".format(response.status_code)
+        error_msg = f"Status code: {response.status_code}. Empty response and no information in the header"
+
         return RetVal(action_result.set_status(phantom.APP_ERROR, error_msg), None)
 
     def _process_xml_response(self, response, action_result):
@@ -125,12 +126,12 @@ class AwsIamConnector(BaseConnector):
         error_code = text[AWSIAM_JSON_ERROR_RESPONSE][AWSIAM_JSON_ERROR][AWSIAM_JSON_ERROR_CODE]
         error_message = text[AWSIAM_JSON_ERROR_RESPONSE][AWSIAM_JSON_ERROR][AWSIAM_JSON_ERROR_MESSAGE]
 
-        error = 'ErrorType: {}\nErrorCode: {}\nErrorMessage: {}'.\
-            format(error_type, error_code, self._handle_py_ver_compat_for_input_str(error_message))
+        error = f'ErrorType: {error_type}\nErrorCode: {error_code}\nErrorMessage: {self._handle_py_ver_compat_for_input_str(error_message)}'
+
         # Process the error returned in the XML
         try:
             message = "Error from server. Status Code: {0} Data from server: {1}".\
-                    format(response.status_code, error)
+                        format(response.status_code, error)
         except Exception:
             message = "Error from server. Status Code: {0} Data from server: {1}".format(
                 response.status_code, text)
@@ -253,11 +254,16 @@ class AwsIamConnector(BaseConnector):
         :param service_name: Service name whose requests are called
         return: Signature key generated using AWS Signature Version 4
         """
-        k_date = self._aws_sign(self._handle_py_ver_compat_for_input_str('{}{}'.format(AWSIAM_SIGNATURE_V4, self._secret_key), always_encode=True), date_stamp)
+        k_date = self._aws_sign(
+            self._handle_py_ver_compat_for_input_str(
+                f'{AWSIAM_SIGNATURE_V4}{self._secret_key}', always_encode=True
+            ),
+            date_stamp,
+        )
+
         k_region = self._aws_sign(k_date, region_name)
         k_service = self._aws_sign(k_region, service_name)
-        k_signing = self._aws_sign(k_service, AWSIAM_SIGNATURE_V4_REQUEST)
-        return k_signing
+        return self._aws_sign(k_service, AWSIAM_SIGNATURE_V4_REQUEST)
 
     def _get_headers(self, current_time, params):
         """ This function is used to get headers for requests to be signed using AWS Signature Version 4.
@@ -275,19 +281,20 @@ class AwsIamConnector(BaseConnector):
         # a) Create the canonical headers and signed headers. Header names
         # must be trimmed and lowercase, and sorted in code point order from
         # low to high. Note that there is a trailing \n.
-        canonical_headers = 'host:{}\nx-amz-date:{}\n'.format(AWSIAM_HOST, amzdate)
+        canonical_headers = f'host:{AWSIAM_HOST}\nx-amz-date:{amzdate}\n'
 
         # b) Create payload hash (hash of the request body content). For GET
         # requests, the payload is an empty string ("").
         payload_hash = hashlib.sha256(self._handle_py_ver_compat_for_input_str("", always_encode=True)).hexdigest()
 
         # c) Combine elements to create canonical request
-        canonical_request = '{}\n/\n{}\n{}\n{}\n{}'.\
-                            format('GET', params, canonical_headers, AWSIAM_SIGNED_HEADERS, payload_hash)
+        canonical_request = f'GET\n/\n{params}\n{canonical_headers}\n{AWSIAM_SIGNED_HEADERS}\n{payload_hash}'
+
 
         # 2. Create the string_to_sign
         # Match the algorithm to the hashing algorithm, either SHA-1 or SHA-256 (recommended)
-        credential_scope = '{}/{}/{}/{}'.format(datestamp, AWSIAM_REGION, AWSIAM_SERVICE, AWSIAM_SIGNATURE_V4_REQUEST)
+        credential_scope = f'{datestamp}/{AWSIAM_REGION}/{AWSIAM_SERVICE}/{AWSIAM_SIGNATURE_V4_REQUEST}'
+
         string_to_sign = '{}\n{}\n{}\n{}'.format(AWSIAM_REQUESTS_SIGNING_ALGO, amzdate, credential_scope,
                                                  hashlib.sha256(self._handle_py_ver_compat_for_input_str(canonical_request, always_encode=True)).hexdigest())
 
@@ -298,13 +305,13 @@ class AwsIamConnector(BaseConnector):
         # b) Sign the string_to_sign using the signing_key
         signature = hmac.new(signing_key, self._handle_py_ver_compat_for_input_str(string_to_sign, always_encode=True), hashlib.sha256).hexdigest()
 
-        authorization_header = '{} Credential={}/{}, SignedHeaders={}, Signature={}'.\
-            format(AWSIAM_REQUESTS_SIGNING_ALGO, self._access_key, credential_scope, AWSIAM_SIGNED_HEADERS, signature)
+        authorization_header = f'{AWSIAM_REQUESTS_SIGNING_ALGO} Credential={self._access_key}/{credential_scope}, SignedHeaders={AWSIAM_SIGNED_HEADERS}, Signature={signature}'
 
-        headers = dict()
-        headers[AWSIAM_JSON_AMZ_DATE] = amzdate
-        headers[AWSIAM_JSON_AUTHORIZATION] = authorization_header
-        return headers
+
+        return {
+            AWSIAM_JSON_AMZ_DATE: amzdate,
+            AWSIAM_JSON_AUTHORIZATION: authorization_header,
+        }
 
     def _make_rest_call(self, action_result, params=None, data=None, method='get', timeout=None):
         """ This function is used to make the REST call.
@@ -352,9 +359,7 @@ class AwsIamConnector(BaseConnector):
         action_result = self.add_action_result(ActionResult(dict(param)))
         self.save_progress(AWSIAM_CONNECTING_ENDPOINT_MSG)
 
-        params = dict()
-        params[AWSIAM_JSON_ACTION] = AWSIAM_TEST_CONNECTIVITY_ENDPOINT
-
+        params = {AWSIAM_JSON_ACTION: AWSIAM_TEST_CONNECTIVITY_ENDPOINT}
         # make rest call
         ret_val, response = self._make_rest_call(action_result=action_result, params=params,
                                                  timeout=AWSIAM_TIME_OUT)
@@ -376,7 +381,7 @@ class AwsIamConnector(BaseConnector):
         self.save_progress("In action handler for: {0}".format(self.get_action_identifier()))
         action_result = self.add_action_result(ActionResult(dict(param)))
 
-        response_dict = dict()
+        response_dict = {}
         username = param[AWSIAM_PARAM_USERNAME]
         disable_access_keys = param.get(AWSIAM_PARAM_DISABLE_ACCESS_KEYS, True)
 
@@ -391,15 +396,26 @@ class AwsIamConnector(BaseConnector):
         if phantom.is_fail(ret_val):
             # a) If Login Profile does not exist, then,
             # 404 error is thrown and it needs to be handled for disable user action
-            if not AWSIAM_USER_LOGIN_PROFILE_ALREADY_DELETED_MSG.format(username=username).lower() in \
-                   action_result.get_message().lower():
+            if (
+                AWSIAM_USER_LOGIN_PROFILE_ALREADY_DELETED_MSG.format(
+                    username=username
+                ).lower()
+                not in action_result.get_message().lower()
+            ):
                 return action_result.get_status()
 
-            resp_dict = dict()
-            resp_dict[AWSIAM_JSON_REQUEST_ID] = response[AWSIAM_JSON_ERROR_RESPONSE][AWSIAM_JSON_REQUEST_ID]
-            response_dict.update(resp_dict)
+            resp_dict = {
+                AWSIAM_JSON_REQUEST_ID: response[AWSIAM_JSON_ERROR_RESPONSE][
+                    AWSIAM_JSON_REQUEST_ID
+                ]
+            }
+
+            response_dict |= resp_dict
         else:
-            response_dict.update(response[AWSIAM_JSON_DELETE_LOGIN_PROFILE_RESPONSE][AWSIAM_JSON_RESPONSE_METADATA])
+            response_dict |= response[AWSIAM_JSON_DELETE_LOGIN_PROFILE_RESPONSE][
+                AWSIAM_JSON_RESPONSE_METADATA
+            ]
+
 
         # 2. Inactivate the access keys of user based on boolean parameter 'disable_access_keys' provided
         # a) List all user access keys
@@ -448,7 +464,7 @@ class AwsIamConnector(BaseConnector):
         username = param[AWSIAM_PARAM_USERNAME]
         password = param[AWSIAM_PARAM_PASSWORD]
         enable_access_keys = param.get(AWSIAM_PARAM_ENABLE_ACCESS_KEYS, True)
-        response_dict = dict()
+        response_dict = {}
 
         # 1. Enable user
         params = OrderedDict()
@@ -462,13 +478,21 @@ class AwsIamConnector(BaseConnector):
         if phantom.is_fail(ret_val):
             # a) If Login Profile already exist, then,
             # 404 error is thrown and it needs to be handled for enable user action
-            if not AWSIAM_USER_LOGIN_PROFILE_ALREADY_EXISTS_MSG.format(username=username).lower() in \
-                   action_result.get_message().lower():
+            if (
+                AWSIAM_USER_LOGIN_PROFILE_ALREADY_EXISTS_MSG.format(
+                    username=username
+                ).lower()
+                not in action_result.get_message().lower()
+            ):
                 return action_result.get_status()
 
-            resp_dict = dict()
-            resp_dict[AWSIAM_JSON_REQUEST_ID] = response[AWSIAM_JSON_ERROR_RESPONSE][AWSIAM_JSON_REQUEST_ID]
-            response_dict.update(resp_dict)
+            resp_dict = {
+                AWSIAM_JSON_REQUEST_ID: response[AWSIAM_JSON_ERROR_RESPONSE][
+                    AWSIAM_JSON_REQUEST_ID
+                ]
+            }
+
+            response_dict |= resp_dict
         else:
             response_dict = response[AWSIAM_JSON_CREATE_LOGIN_PROFILE_RESPONSE]
             response_dict = response_dict[AWSIAM_JSON_CREATE_LOGIN_PROFILE_RESULT][AWSIAM_JSON_LOGIN_PROFILE]
@@ -770,7 +794,7 @@ class AwsIamConnector(BaseConnector):
             # a) If role does not exist, then,
             # 404 error is thrown and it needs to be handled for the calling action
             if AWSIAM_ROLE_DOES_NOT_EXISTS_MSG.format(role_name=role_name).lower() in \
-                    action_result.get_message().lower():
+                        action_result.get_message().lower():
                 return False
 
             return None
@@ -797,7 +821,7 @@ class AwsIamConnector(BaseConnector):
             # a) If instance profile does not exist, then,
             # 404 error is thrown and it needs to be handled for add role action
             if AWSIAM_ROLE_INSTANCE_PROFILE_DOES_NOT_EXISTS_MSG.format(instance_profile_name=role_name).lower() in \
-                    action_result.get_message().lower():
+                        action_result.get_message().lower():
                 return False
 
             return None
@@ -848,7 +872,9 @@ class AwsIamConnector(BaseConnector):
                                             format(role_name=role_name))
 
         # Check if role_path is given in correct format
-        if not role_path == '/' and (not role_path.startswith('/') or not role_path.endswith('/')):
+        if role_path != '/' and (
+            (not role_path.startswith('/') or not role_path.endswith('/'))
+        ):
             return action_result.set_status(phantom.APP_ERROR, AWSIAM_INVALID_ROLE_PATH_MSG)
 
         # 1. Add a container instance profile for role creation in AWS IAM account
@@ -917,12 +943,14 @@ class AwsIamConnector(BaseConnector):
         # make rest call
         ret_val, response = self._make_rest_call(action_result=action_result, params=params)
 
-        if phantom.is_fail(ret_val):
-            # a) If Login Profile does not exist, then,
-            # 404 error is thrown and it needs to be handled for delete user action
-            if not AWSIAM_USER_LOGIN_PROFILE_ALREADY_DELETED_MSG.format(username=username).lower() in \
-                   action_result.get_message().lower():
-                return action_result.get_status()
+        if (
+            phantom.is_fail(ret_val)
+            and AWSIAM_USER_LOGIN_PROFILE_ALREADY_DELETED_MSG.format(
+                username=username
+            ).lower()
+            not in action_result.get_message().lower()
+        ):
+            return action_result.get_status()
 
         # 2. Delete all attached policies of user
         # a) List all user policies
@@ -1088,8 +1116,6 @@ class AwsIamConnector(BaseConnector):
         action_result = self.add_action_result(ActionResult(dict(param)))
 
         username = param[AWSIAM_PARAM_USERNAME]
-        user_details = dict()
-
         # 1. Fetch entire details for user groups and attached policies
         params = OrderedDict()
         params[AWSIAM_JSON_ACTION] = AWSIAM_GET_USER_GROUPS_ENDPOINT
@@ -1105,7 +1131,7 @@ class AwsIamConnector(BaseConnector):
         for group in list_groups:
             group[AWSIAM_JSON_REQUEST_ID] = groups_dict[AWSIAM_JSON_REQUEST_ID]
 
-        user_details[AWSIAM_JSON_GROUPS] = list_groups
+        user_details = {AWSIAM_JSON_GROUPS: list_groups}
         no_of_groups = len(list_groups)
 
         # 2. Fetch user policies
@@ -1148,7 +1174,11 @@ class AwsIamConnector(BaseConnector):
         self.save_progress("In action handler for: {0}".format(self.get_action_identifier()))
         action_result = self.add_action_result(ActionResult(dict(param)))
 
-        if group_path and not group_path == '/' and (not group_path.startswith('/') or not group_path.endswith('/')):
+        if (
+            group_path
+            and group_path != '/'
+            and ((not group_path.startswith('/') or not group_path.endswith('/')))
+        ):
             return action_result.set_status(phantom.APP_ERROR, AWSIAM_INVALID_GROUP_PATH_MSG)
 
         params = OrderedDict()
@@ -1194,11 +1224,15 @@ class AwsIamConnector(BaseConnector):
             params[AWSIAM_JSON_ACTION] = AWSIAM_LIST_USERS_OF_GROUP_ENDPOINT
             params[AWSIAM_JSON_GROUP_NAME] = group_name
             endpoint_flag = AWSIAM_JSON_GROUP_USERS
-        elif not user_path and not group_name:
+        else:
             params[AWSIAM_JSON_ACTION] = AWSIAM_LIST_USERS_ENDPOINT
             params[AWSIAM_JSON_USER_PATH_PREFIX] = '/'
 
-        if user_path and not user_path == '/' and (not user_path.startswith('/') or not user_path.endswith('/')):
+        if (
+            user_path
+            and user_path != '/'
+            and ((not user_path.startswith('/') or not user_path.endswith('/')))
+        ):
             return action_result.set_status(phantom.APP_ERROR, AWSIAM_INVALID_USER_PATH_MSG)
 
         # 1. Fetch users of an AWS account
@@ -1282,11 +1316,7 @@ class AwsIamConnector(BaseConnector):
             json_resp_part_2 = (self._response_metadata_dict[key])[2]
 
             pagination_key = self._handle_py_ver_compat_for_input_str(response[json_resp_part_0][json_resp_part_1][AWSIAM_JSON_IS_TRUNCATED])
-            if pagination_key == 'true':
-                is_pagination_required = True
-            else:
-                is_pagination_required = False
-
+            is_pagination_required = pagination_key == 'true'
             if response[json_resp_part_0][json_resp_part_1][json_resp_part_2]:
                 items = response[json_resp_part_0][json_resp_part_1][json_resp_part_2][AWSIAM_JSON_MEMBER]
             else:
@@ -1305,12 +1335,10 @@ class AwsIamConnector(BaseConnector):
             else:
                 break
 
-        # Return a dictionary consisting of list of items retrieved and request ID of last request made
-        response_dict = dict()
-        response_dict[AWSIAM_JSON_LIST_RESPONSE] = list_items
-        response_dict[AWSIAM_JSON_REQUEST_ID] = request_id
-
-        return response_dict
+        return {
+            AWSIAM_JSON_LIST_RESPONSE: list_items,
+            AWSIAM_JSON_REQUEST_ID: request_id,
+        }
 
     def handle_action(self, param):
         """ This function gets current action identifier and calls member function of its own to handle the action.
@@ -1344,7 +1372,7 @@ class AwsIamConnector(BaseConnector):
 
         action_execution_status = phantom.APP_SUCCESS
 
-        if action in action_mapping.keys():
+        if action in action_mapping:
             action_function = action_mapping[action]
             action_execution_status = action_function(param)
 
@@ -1352,29 +1380,53 @@ class AwsIamConnector(BaseConnector):
 
     @staticmethod
     def _get_response_metadata_dict():
-        response_dict = dict()
-
-        response_dict[AWSIAM_JSON_GROUPS] = [AWSIAM_JSON_LIST_GROUPS_FOR_USER_RESPONSE,
-                                             AWSIAM_JSON_LIST_GROUPS_FOR_USER_RESULT, AWSIAM_JSON_GROUPS]
-        response_dict[AWSIAM_JSON_POLICIES] = [AWSIAM_JSON_LIST_POLICIES_FOR_USER_RESPONSE,
-                                               AWSIAM_JSON_LIST_POLICIES_FOR_USER_RESULT, AWSIAM_JSON_POLICIES]
-        response_dict[AWSIAM_JSON_ROLES] = [AWSIAM_JSON_LIST_ROLES_RESPONSE,
-                                            AWSIAM_JSON_LIST_ROLES_RESULT, AWSIAM_JSON_ROLES]
-        response_dict[AWSIAM_JSON_USERS] = [AWSIAM_JSON_LIST_USERS_RESPONSE,
-                                            AWSIAM_JSON_LIST_USERS_RESULT, AWSIAM_JSON_USERS]
-        response_dict[AWSIAM_JSON_GROUP_USERS] = [AWSIAM_JSON_GET_GROUP_RESPONSE,
-                                                  AWSIAM_JSON_GET_GROUP_RESULT, AWSIAM_JSON_USERS]
-        response_dict[AWSIAM_JSON_ACCESS_KEYS] = [AWSIAM_JSON_LIST_ACCESS_KEYS_RESPONSE,
-                                                  AWSIAM_JSON_LIST_ACCESS_KEYS_RESULT, AWSIAM_JSON_ACCESS_KEYS]
-        response_dict[AWSIAM_JSON_INSTANCE_PROFILES] = [AWSIAM_JSON_LIST_INSTANCE_PROFILES_RESPONSE,
-                                                        AWSIAM_JSON_LIST_INSTANCE_PROFILES_RESULT,
-                                                        AWSIAM_JSON_INSTANCE_PROFILES]
-        response_dict[AWSIAM_JSON_ROLE_POLICIES] = [AWSIAM_JSON_LIST_ROLE_POLICIES_RESPONSE,
-                                                    AWSIAM_JSON_LIST_ROLE_POLICIES_RESULT, AWSIAM_JSON_POLICIES]
-        response_dict[AWSIAM_JSON_PATHS_GROUPS] = [AWSIAM_JSON_LIST_GROUPS_RESPONSE,
-                                                   AWSIAM_JSON_LIST_GROUPS_RESULT, AWSIAM_JSON_GROUPS]
-
-        return response_dict
+        return {
+            AWSIAM_JSON_GROUPS: [
+                AWSIAM_JSON_LIST_GROUPS_FOR_USER_RESPONSE,
+                AWSIAM_JSON_LIST_GROUPS_FOR_USER_RESULT,
+                AWSIAM_JSON_GROUPS,
+            ],
+            AWSIAM_JSON_POLICIES: [
+                AWSIAM_JSON_LIST_POLICIES_FOR_USER_RESPONSE,
+                AWSIAM_JSON_LIST_POLICIES_FOR_USER_RESULT,
+                AWSIAM_JSON_POLICIES,
+            ],
+            AWSIAM_JSON_ROLES: [
+                AWSIAM_JSON_LIST_ROLES_RESPONSE,
+                AWSIAM_JSON_LIST_ROLES_RESULT,
+                AWSIAM_JSON_ROLES,
+            ],
+            AWSIAM_JSON_USERS: [
+                AWSIAM_JSON_LIST_USERS_RESPONSE,
+                AWSIAM_JSON_LIST_USERS_RESULT,
+                AWSIAM_JSON_USERS,
+            ],
+            AWSIAM_JSON_GROUP_USERS: [
+                AWSIAM_JSON_GET_GROUP_RESPONSE,
+                AWSIAM_JSON_GET_GROUP_RESULT,
+                AWSIAM_JSON_USERS,
+            ],
+            AWSIAM_JSON_ACCESS_KEYS: [
+                AWSIAM_JSON_LIST_ACCESS_KEYS_RESPONSE,
+                AWSIAM_JSON_LIST_ACCESS_KEYS_RESULT,
+                AWSIAM_JSON_ACCESS_KEYS,
+            ],
+            AWSIAM_JSON_INSTANCE_PROFILES: [
+                AWSIAM_JSON_LIST_INSTANCE_PROFILES_RESPONSE,
+                AWSIAM_JSON_LIST_INSTANCE_PROFILES_RESULT,
+                AWSIAM_JSON_INSTANCE_PROFILES,
+            ],
+            AWSIAM_JSON_ROLE_POLICIES: [
+                AWSIAM_JSON_LIST_ROLE_POLICIES_RESPONSE,
+                AWSIAM_JSON_LIST_ROLE_POLICIES_RESULT,
+                AWSIAM_JSON_POLICIES,
+            ],
+            AWSIAM_JSON_PATHS_GROUPS: [
+                AWSIAM_JSON_LIST_GROUPS_RESPONSE,
+                AWSIAM_JSON_LIST_GROUPS_RESULT,
+                AWSIAM_JSON_GROUPS,
+            ],
+        }
 
     def initialize(self):
         """ This is an optional function that can be implemented by the AppConnector derived class. Since the
@@ -1439,20 +1491,28 @@ if __name__ == '__main__':
     if username and password:
         try:
             print("Accessing the Login page")
-            r = requests.get(BaseConnector._get_phantom_base_url() + "login", verify=False)
+            r = requests.get(f"{BaseConnector._get_phantom_base_url()}login", verify=False)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken={}'.format(csrftoken)
-            headers['Referer'] = BaseConnector._get_phantom_base_url() + 'login'
+            headers = {
+                'Cookie': f'csrftoken={csrftoken}',
+                'Referer': f'{BaseConnector._get_phantom_base_url()}login',
+            }
 
             print("Logging into Platform to get the session id")
-            r2 = requests.post(BaseConnector._get_phantom_base_url() + "login", verify=False, data=data, headers=headers)
+            r2 = requests.post(
+                f"{BaseConnector._get_phantom_base_url()}login",
+                verify=False,
+                data=data,
+                headers=headers,
+            )
+
             session_id = r2.cookies['sessionid']
         except Exception as e:
             print("Unable to get session id from the platform. Error: {0}".format(str(e)))

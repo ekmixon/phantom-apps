@@ -49,14 +49,7 @@ def pushLog(d, address, logTime=datetime.utcnow()):
 
 def main():
     args = sys.argv[1:]
-    host = 'localhost'
-    if len(args):
-        host = args[0].strip()
-    if host == 'localhost':
-        # from app.qpylib import qpylib
-        # host = qpylib.get_console_address()
-        pass
-
+    host = args[0].strip() if len(args) else 'localhost'
     testPayload =\
         '{"pagetitle": "", "emailsubject": "", "action": "", "emailbcc": "", "filename": "", "application":'
     '"Bitglass", "dlppattern": "", "location": "Atlanta||Georgia||GA||US", "email": "nspringer@acme-gadget.com",'

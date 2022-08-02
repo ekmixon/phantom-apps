@@ -12,14 +12,11 @@ def get_ctx_result(provides, result):
     :return: response data
     """
 
-    ctx_result = {}
-
     param = result.get_param()
     summary = result.get_summary()
     data = result.get_data()
 
-    ctx_result['param'] = param
-
+    ctx_result = {'param': param}
     if summary:
         ctx_result['summary'] = summary
     ctx_result['action'] = provides
@@ -45,11 +42,7 @@ def display_view(provides, all_app_runs, context):
     for _, action_results in all_app_runs:
         for result in action_results:
 
-            ctx_result = get_ctx_result(provides, result)
-            if not ctx_result:
-                continue
-            results.append(ctx_result)
+            if ctx_result := get_ctx_result(provides, result):
+                results.append(ctx_result)
 
-    return_page = "awssecurityhub_get_findings.html"
-
-    return return_page
+    return "awssecurityhub_get_findings.html"

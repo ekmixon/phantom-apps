@@ -80,10 +80,7 @@ def _to_port(port):
 
     port = int(port)
 
-    if port == ARCSIGHT_32VAL_NOT_FILLED:
-        return ''
-
-    return port
+    return '' if port == ARCSIGHT_32VAL_NOT_FILLED else port
 
 
 def _get_str_from_epoch(epoch_milli):
@@ -91,11 +88,13 @@ def _get_str_from_epoch(epoch_milli):
     if epoch_milli is None:
         return ''
 
-    if not str(epoch_milli).strip():
-        return ''
-
-    # 2015-07-21T00:27:59Z
-    return datetime.fromtimestamp(int(epoch_milli) / 1000.0).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+    return (
+        datetime.fromtimestamp(int(epoch_milli) / 1000.0).strftime(
+            '%Y-%m-%dT%H:%M:%S.%fZ'
+        )
+        if str(epoch_milli).strip()
+        else ''
+    )
 
 
 def _parse_error(response):
@@ -194,9 +193,9 @@ class ArcsightConnector(BaseConnector):
 
         try:
             if error_code in ERR_CODE_MSG:
-                error_text = "Error Message: {}".format(error_msg)
+                error_text = f"Error Message: {error_msg}"
             else:
-                error_text = "Error Code: {}. Error Message: {}".format(error_code, error_msg)
+                error_text = f"Error Code: {error_code}. Error Message: {error_msg}"
         except:
             self.debug_print(PARSE_ERR_MSG)
             error_text = PARSE_ERR_MSG
@@ -299,7 +298,7 @@ class ArcsightConnector(BaseConnector):
         _headers = {'Accept': 'application/json'}
 
         if headers:
-            _headers.update(headers)
+            _headers |= headers
 
         try:
             response = request_func(url, params=params, data=data, json=json, headers=_headers,
@@ -465,18 +464,14 @@ class ArcsightConnector(BaseConnector):
 
             cef = {}
 
-            # source details
-            source = event.get('source')
-            if source:
+            if source := event.get('source'):
                 cef['sourceUserName'] = source.get('userName')
                 cef['sourceAddress'] = _to_ip(source.get('address'))
                 cef['sourceMacAddress'] = _to_mac(source.get('maxAddress'))
                 cef['sourcePort'] = _to_port(source.get('port'))
                 cef['sourceHostName'] = source.get('hostName')
 
-            # destination details
-            destination = event.get('destination')
-            if destination:
+            if destination := event.get('destination'):
                 cef['destinationUserName'] = destination.get('userName')
                 cef['destinationAddress'] = _to_ip(destination.get('address'))
                 cef['destinationMacAddress'] = _to_mac(destination.get('maxAddress'))
@@ -501,8 +496,7 @@ class ArcsightConnector(BaseConnector):
 
         results = results[:container_count]
 
-        for i, result in enumerate(results):
-
+        for result in results:
             container = result.get('container')
 
             if not container:
@@ -576,9 +570,7 @@ class ArcsightConnector(BaseConnector):
         if phantom.is_fail(ret_val):
             return action_result.get_status()
 
-        container_id = param.get(phantom.APP_JSON_CONTAINER_ID)
-
-        if container_id:
+        if container_id := param.get(phantom.APP_JSON_CONTAINER_ID):
             case_ids = param[phantom.APP_JSON_CONTAINER_ID]
             case_ids = case_ids.split(',')
         else:
@@ -714,9 +706,7 @@ class ArcsightConnector(BaseConnector):
             if phantom.is_fail(ret_val):
                 action_result.append_to_message(ARCSIGHT_ERR_UNABLE_TO_GET_CASE_INFO)
                 return action_result.get_status()
-            case_id = case_details.get('resourceid')
-
-            if case_id:
+            if case_id := case_details.get('resourceid'):
                 summary['case_id'] = case_id
 
             action_result.add_data(case_details)
@@ -744,9 +734,7 @@ class ArcsightConnector(BaseConnector):
         except:
             case_details = {}
 
-        case_id = case_details.get('resourceid')
-
-        if case_id:
+        if case_id := case_details.get('resourceid'):
             summary['case_id'] = case_id
 
         action_result.add_data(case_details)
@@ -943,26 +931,24 @@ def main():
     headers = None
     if username and password:
         try:
-            login_url = ArcsightConnector._get_phantom_base_url() + "/login"
+            login_url = f"{ArcsightConnector._get_phantom_base_url()}/login"
 
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies["csrftoken"]
 
-            data = dict()
-            data["username"] = username
-            data["password"] = password
-            data["csrfmiddlewaretoken"] = csrftoken
+            data = {
+                "username": username,
+                "password": password,
+                "csrfmiddlewaretoken": csrftoken,
+            }
 
-            headers = dict()
-            headers["Cookie"] = "csrftoken=" + csrftoken
-            headers["Referer"] = login_url
-
+            headers = {"Cookie": f"csrftoken={csrftoken}", "Referer": login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies["sessionid"]
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

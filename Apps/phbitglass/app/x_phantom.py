@@ -322,7 +322,7 @@ class BitglassConnector(BaseConnector):
         with tempfile(conf._folder, mode=mode) as tmppath:
             with open(tmppath, mode=mode) as file:
                 print(msg, file=file)
-            os.rename(tmppath, tmppath + '_')
+            os.rename(tmppath, f'{tmppath}_')
 
     def _handle_on_poll(self, param):
         """ NOTE The action name 'on_poll' is magic and makes the 'Ingest Settings' tab appear in the asset settings
@@ -397,17 +397,14 @@ class BitglassConnector(BaseConnector):
         matchRe = param['bg_match_expression']
         aid = param['bg_log_event']
 
-        cef = self._get_artifact_cef(aid)
-        if cef:
+        if cef := self._get_artifact_cef(aid):
             if re.fullmatch(matchRe, cef['dataPatterns']):
                 self.debug_print('dataPatterns matched', cef['dataPatterns'])
-                action_result.add_data(cef)
             else:
                 # To avoid the error message, have to return non-empty set of data.
                 # This will be ignored as the user name is empty
                 cef['userName'] = '_'
-                action_result.add_data(cef)
-
+            action_result.add_data(cef)
         # Return success, no need to set the message, only the status
         # BaseConnector will create a textual message based off of the summary dictionary
         return action_result.set_status(phantom.APP_SUCCESS)
@@ -440,12 +437,11 @@ class BitglassConnector(BaseConnector):
 
         haveUserName = True
         if underphantom:
-            # newUsers is preserved between actions ONLY in testing (separate app instances in the former)
-            if param['bg_user_name'] != '' and param['bg_user_name'] != '_':
-                self.newUsers = [param['bg_user_name']]
-            else:
+            if param['bg_user_name'] in ['', '_']:
                 haveUserName = False
 
+            else:
+                self.newUsers = [param['bg_user_name']]
         params = None
         if haveUserName:
             params = json.loads(''.join([
@@ -461,12 +457,7 @@ class BitglassConnector(BaseConnector):
     def _handle_remove_from_group(self, param):
         groupName = param['bg_group_name']
 
-        haveUserName = True
-        if underphantom:
-            # newUsers is preserved between actions ONLY in testing (separate app instances in the former)
-            if param['bg_user_name'] == '':
-                haveUserName = False
-
+        haveUserName = not underphantom or param['bg_user_name'] != ''
         params = None
         if haveUserName:
             params = json.loads(''.join([
@@ -674,7 +665,7 @@ def main():
     if username and password:
         try:
             # TODO ?? Implement _get_phantom_base_url()
-            login_url = BitglassConnector._get_phantom_base_url() + '/login'
+            login_url = f'{BitglassConnector._get_phantom_base_url()}/login'
 
             print("Accessing the Login page")
             # TODO Switched to verify=True for the sake of the security scan, no config yet parsed by now..
@@ -682,22 +673,20 @@ def main():
             r = requests.get(login_url, verify=True)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print("Logging into Platform to get the session id")
             # TODO Switched to verify=True for the sake of the security scan, no config yet parsed by now..
             #      Add command option?
             r2 = requests.post(login_url, verify=True, data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

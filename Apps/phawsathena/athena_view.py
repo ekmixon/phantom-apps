@@ -14,12 +14,13 @@ def display_query_results(provides, all_results, context):
             table['header'] = table_header = []
             data = result.get_data()
             for header_item in data[:1]:  # create headers
-                for h in header_item:
-                    table_header.append(h.get('VarCharValue'))
+                table_header.extend(h.get('VarCharValue') for h in header_item)
             for item in data[1:]:  # skipping header
-                row = []
-                for _index, _ in enumerate(table_header):
-                    row.append({'value': item[_index].get('VarCharValue')})
+                row = [
+                    {'value': item[_index].get('VarCharValue')}
+                    for _index, _ in enumerate(table_header)
+                ]
+
                 table_data.append(row)
             results.append(table)
 

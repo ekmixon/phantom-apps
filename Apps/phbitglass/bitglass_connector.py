@@ -87,8 +87,10 @@ class BitglassConnector(BaseConnector):
 
         return RetVal(
             action_result.set_status(
-                phantom.APP_ERROR, "Status code: {}. Empty response and no information in the header".format(response.status_code)
-            ), None
+                phantom.APP_ERROR,
+                f"Status code: {response.status_code}. Empty response and no information in the header",
+            ),
+            None,
         )
 
     def _get_error_message_from_exception(self, e):
@@ -347,7 +349,7 @@ class BitglassConnector(BaseConnector):
         with tempfile(conf._folder, mode=mode) as tmppath:
             with open(tmppath, mode=mode) as file:
                 print(msg, file=file)
-            os.rename(tmppath, tmppath + '_')
+            os.rename(tmppath, f'{tmppath}_')
 
     def _handle_on_poll(self, param):
         """ NOTE The action name 'on_poll' is magic and makes the 'Ingest Settings' tab appear in the asset settings
@@ -409,7 +411,7 @@ class BitglassConnector(BaseConnector):
             cef = r.json()['cef']
         except Exception as ex:
             err_msg = self._get_error_message_from_exception(ex)
-            self.debug_print("Unable to query Bitglass artifact: {}".format(err_msg))
+            self.debug_print(f"Unable to query Bitglass artifact: {err_msg}")
             return None
 
         return cef
@@ -421,17 +423,15 @@ class BitglassConnector(BaseConnector):
         matchRe = param['bg_match_expression']
         aid = param['bg_log_event']
 
-        cef = self._get_artifact_cef(aid)
-        if cef:
+        if cef := self._get_artifact_cef(aid):
             try:
                 if re.fullmatch(matchRe, cef['dataPatterns']):
                     self.debug_print("'dataPatterns' matched", cef['dataPatterns'])
-                    action_result.add_data(cef)
                 else:
                     # To avoid the error message, have to return non-empty set of data.
                     # This will be ignored as the user name is empty
                     cef['userName'] = '_'
-                    action_result.add_data(cef)
+                action_result.add_data(cef)
             except Exception:
                 self.debug_print("'dataPatterns' not found")
 
@@ -477,8 +477,7 @@ class BitglassConnector(BaseConnector):
 
         haveUserName = True
         if underphantom:
-            # newUsers is preserved between actions ONLY in testing (separate app instances in the former)
-            if userName != '' and userName != '_':
+            if userName not in ['', '_']:
                 self.newUsers = [userName]
             else:
                 haveUserName = False
@@ -503,12 +502,7 @@ class BitglassConnector(BaseConnector):
         groupName = param['bg_group_name']
         userName = param['bg_user_name']
 
-        haveUserName = True
-        if underphantom:
-            # newUsers is preserved between actions ONLY in testing (separate app instances in the former)
-            if userName == '':
-                haveUserName = False
-
+        haveUserName = not underphantom or userName != ''
         params = None
         if haveUserName:
             try:
@@ -656,7 +650,10 @@ class BitglassConnector(BaseConnector):
             conf.proxies = conf._getProxies(config.get('proxies', ''))
         except BaseException as ex:
             err_msg = self._get_error_message_from_exception(ex)
-            self.debug_print('Bad proxy param while getting configuration params {}'.format(err_msg))
+            self.debug_print(
+                f'Bad proxy param while getting configuration params {err_msg}'
+            )
+
 
         # These 2 are extra
         conf.filter_access = config.get('filter_access', '')
@@ -724,7 +721,7 @@ def main():
     if username and password:
         try:
             # TODO ?? Implement _get_phantom_base_url()
-            login_url = BitglassConnector._get_phantom_base_url() + '/login'
+            login_url = f'{BitglassConnector._get_phantom_base_url()}/login'
 
             print("Accessing the Login page")
             # TODO Switched to verify=True for the sake of the security scan, no config yet parsed by now..
@@ -732,22 +729,20 @@ def main():
             r = requests.get(login_url, verify=True)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print("Logging into Platform to get the session id")
             # TODO Switched to verify=True for the sake of the security scan, no config yet parsed by now..
             #      Add command option?
             r2 = requests.post(login_url, verify=True, data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

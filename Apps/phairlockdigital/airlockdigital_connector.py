@@ -202,7 +202,7 @@ class AirlockDigitalConnector(BaseConnector):
             return RetVal(action_result.set_status(phantom.APP_ERROR, "Invalid method: {0}".format(method)), resp_json)
 
         # Create a URL to connect to
-        url = "{}{}".format(self._base_url, endpoint)
+        url = f"{self._base_url}{endpoint}"
 
         try:
             r = request_func(
@@ -210,10 +210,11 @@ class AirlockDigitalConnector(BaseConnector):
                             verify=config.get('verify_server_cert', False),
                             **kwargs)
         except requests.exceptions.InvalidSchema:
-            error_message = 'Error connecting to server. No connection adapters were found for %s' % (url)
+            error_message = f'Error connecting to server. No connection adapters were found for {url}'
+
             return RetVal(action_result.set_status(phantom.APP_ERROR, error_message), resp_json)
         except requests.exceptions.InvalidURL:
-            error_message = 'Error connecting to server. Invalid URL %s' % (url)
+            error_message = f'Error connecting to server. Invalid URL {url}'
             return RetVal(action_result.set_status(phantom.APP_ERROR, error_message), resp_json)
         except requests.exceptions.ConnectionError:
             error_message = 'Error Details: Connection Refused from the Server'
@@ -250,10 +251,7 @@ class AirlockDigitalConnector(BaseConnector):
 
         action_result = self.add_action_result(ActionResult(dict(param)))
 
-        # Empty arrays
-        url_req = []
-
-        self.save_progress("File hash var: {}".format(hash_param))
+        self.save_progress(f"File hash var: {hash_param}")
 
         if not blocklistid:
             self.save_progress("No blocklistid was specified, removing hash(es) from all blocklist packages")
@@ -269,7 +267,13 @@ class AirlockDigitalConnector(BaseConnector):
                 "blocklistid": blocklistid
             }
 
-        url_req.append({'url': url, 'header_var': self._header_var, 'request_type': 'blocklist'})
+        url_req = [
+            {
+                'url': url,
+                'header_var': self._header_var,
+                'request_type': 'blocklist',
+            }
+        ]
 
         # Make the request
         ret_val, response = self._make_rest_call(url, action_result, json=request_json, headers=self._header_var, method="post")
@@ -303,12 +307,9 @@ class AirlockDigitalConnector(BaseConnector):
 
         action_result = self.add_action_result(ActionResult(dict(param)))
 
-        # Empty arrays
-        url_req = []
+        self.save_progress(f"File hash var: {hash_param}")
 
-        self.save_progress("File hash var: {}".format(hash_param))
-
-        if (applicationid == "" or None):
+        if applicationid == "":
             self.save_progress("No applicationid was specified, removing hash(es) from all application capture packages")
             url = AIRLOCK_HASH_APPLICATION_REMOVE_ALL_ENDPOINT
             request_json = {
@@ -322,7 +323,13 @@ class AirlockDigitalConnector(BaseConnector):
                 "applicationid": applicationid
             }
 
-        url_req.append({'url': url, 'header_var': self._header_var, 'request_type': 'application'})
+        url_req = [
+            {
+                'url': url,
+                'header_var': self._header_var,
+                'request_type': 'application',
+            }
+        ]
 
         # Make the request
         ret_val, response = self._make_rest_call(url, action_result, json=request_json, headers=self._header_var, method="post")
@@ -352,12 +359,9 @@ class AirlockDigitalConnector(BaseConnector):
 
         action_result = self.add_action_result(ActionResult(dict(param)))
 
-        # Empty arrays
-        url_req = []
-
         hash_param = self._handle_py_ver_compat_for_input_str(param['hash'])
 
-        self.save_progress("File hash var: {}".format(hash_param))
+        self.save_progress(f"File hash var: {hash_param}")
 
         url = AIRLOCK_HASH_BLOCKLIST_ADD_ENDPOINT
         # Required values can be accessed directly
@@ -366,10 +370,19 @@ class AirlockDigitalConnector(BaseConnector):
             "blocklistid": param['blocklistid']
         }
 
-        url_req.append({'url': url, 'header_var': self._header_var, 'request_type': 'blocklist'})
+        url_req = [
+            {
+                'url': url,
+                'header_var': self._header_var,
+                'request_type': 'blocklist',
+            }
+        ]
 
         # Make the request for each
-        self.save_progress("Sending hash value to {}".format(AIRLOCK_HASH_BLOCKLIST_ADD_ENDPOINT))
+        self.save_progress(
+            f"Sending hash value to {AIRLOCK_HASH_BLOCKLIST_ADD_ENDPOINT}"
+        )
+
         ret_val, response = self._make_rest_call(url, action_result, json=request_json, headers=self._header_var, method="post")
 
         if (phantom.is_fail(ret_val)):
@@ -397,12 +410,9 @@ class AirlockDigitalConnector(BaseConnector):
 
         action_result = self.add_action_result(ActionResult(dict(param)))
 
-        # Empty arrays
-        url_req = []
-
         hash_param = self._handle_py_ver_compat_for_input_str(param['hash'])
 
-        self.save_progress("File hash var: {}".format(hash_param))
+        self.save_progress(f"File hash var: {hash_param}")
 
         # We first need to populate the hash value into the airlock file repository, so it can be added into an appcap
         url = AIRLOCK_HASH_ADD_ENDPOINT
@@ -412,7 +422,13 @@ class AirlockDigitalConnector(BaseConnector):
            "hashes": [{"path": param['path'], "sha256": hash_param}]
         }
 
-        url_req.append({'url': url, 'header_var': self._header_var, 'request_type': 'application'})
+        url_req = [
+            {
+                'url': url,
+                'header_var': self._header_var,
+                'request_type': 'application',
+            }
+        ]
 
         # Make the request to populate the application capture
         self.save_progress("Populating the Airlock repository with the specified hash value and path")
@@ -486,7 +502,10 @@ class AirlockDigitalConnector(BaseConnector):
             return action_result.set_status(phantom.APP_ERROR, "Invalid policy type, please provide policy type either application, baseline, group, or blocklist")
 
         # Make the request
-        self.save_progress("Making request to URL: {} with request type of {}.".format(url, policy_type))
+        self.save_progress(
+            f"Making request to URL: {url} with request type of {policy_type}."
+        )
+
         ret_val, response = self._make_rest_call(url, action_result, headers=self._header_var, method=req_method)
 
         if (phantom.is_fail(ret_val)):
@@ -497,23 +516,23 @@ class AirlockDigitalConnector(BaseConnector):
         try:
             if policy_type == 'baseline':
                 for i in response['response']['baselines']:
-                    self.save_progress("Request Format {}".format(i))
+                    self.save_progress(f"Request Format {i}")
                     resp_arr.append({"name": i['name'], "id": i['baselineid'], "type": "baseline"})
             # Modify blocklist Request to fit in columns
             if policy_type == 'blocklist':
-                self.save_progress("blocklist request {}.".format(response))
+                self.save_progress(f"blocklist request {response}.")
                 for i in response['response']['blocklists']:
-                    self.save_progress("Request Format {}".format(i))
+                    self.save_progress(f"Request Format {i}")
                     resp_arr.append({"name": i['name'], "id": i['blocklistid'], "type": "blocklist"})
             # Modify application Request to fit in columns
             if policy_type == 'application':
                 for i in response['response']['applications']:
-                    self.save_progress("Request Format {}".format(i))
+                    self.save_progress(f"Request Format {i}")
                     resp_arr.append({"name": i['name'], "id": i['applicationid'], "type": "application"})
             # Modify group Request to fit in columns
             if policy_type == 'group':
                 for i in response['response']['groups']:
-                    self.save_progress("Request Format {}".format(i))
+                    self.save_progress(f"Request Format {i}")
                     resp_arr.append({"name": i['name'], "id": i['groupid'], "parent": i['parent'], "type": "group"})
 
             # Add the response into the data section
@@ -548,7 +567,7 @@ class AirlockDigitalConnector(BaseConnector):
 
         # make rest call that iterates over each url
         # Make the request for each
-        self.save_progress("Making request to URL: {}".format(url))
+        self.save_progress(f"Making request to URL: {url}")
         ret_val, response = self._make_rest_call(url, action_result, json=json_body, headers=self._header_var, method="post")
 
         if (phantom.is_fail(ret_val)):
@@ -587,7 +606,7 @@ class AirlockDigitalConnector(BaseConnector):
 
         json_body = {"agentid": agent_id, "groupid": group_id}
         # Make the request for each
-        self.save_progress("Making request to URL: {}".format(url))
+        self.save_progress(f"Making request to URL: {url}")
         ret_val, response = self._make_rest_call(url, action_result, headers=self._header_var, json=json_body, method="post")
 
         if (phantom.is_fail(ret_val)):
@@ -631,11 +650,8 @@ class AirlockDigitalConnector(BaseConnector):
         if domain == "all":
             domain = ""
 
-        # If optional parameters are set, then add them to the header_var dictionary
-        # Create an iterator to identify the correct header field
-        x = 0
         param_var = {}
-        for a in [ip, hostname, domain, agentid, username, groupid, os, status]:
+        for x, a in enumerate([ip, hostname, domain, agentid, username, groupid, os, status]):
             if len(a) > 0:
                 if x == 0:
                     param_var["ip"] = a
@@ -653,17 +669,15 @@ class AirlockDigitalConnector(BaseConnector):
                     param_var["os"] = a
                 elif x == 7:
                     param_var["status"] = a
-            x += 1
-
         # make rest call
         # If more than one parameter is set
         if len(param_var.keys()) >= 1:
             if param_var["hostname"] != "all":
-                self.save_progress("Requested parameters: {}".format(param_var))
+                self.save_progress(f"Requested parameters: {param_var}")
                 ret_val, response = self._make_rest_call(AIRLOCK_AGENT_FIND_ENDPOINT, action_result, json=param_var, headers=self._header_var, method="post")
             else:
                 param_var.pop('hostname')
-                self.save_progress("Requested parameters: {}".format(param_var))
+                self.save_progress(f"Requested parameters: {param_var}")
                 self.save_progress("All has been specified in hostname, so returning all hosts")
                 ret_val, response = self._make_rest_call(AIRLOCK_AGENT_FIND_ENDPOINT, action_result, headers=self._header_var, method="post")
 
@@ -887,26 +901,24 @@ if __name__ == '__main__':
 
     if (username and password):
         try:
-            login_url = AirlockDigitalConnector._get_phantom_base_url() + '/login'
+            login_url = f'{AirlockDigitalConnector._get_phantom_base_url()}/login'
 
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

@@ -33,7 +33,7 @@ class Password(object):
         import ctypes
         v = ord(s[0]) << 7
         for c in s:
-            v = ctypes.c_int32((int(1000003) * v) & 0xffffffff).value ^ ord(c)
+            v = ctypes.c_int32(1000003 * v & 0xffffffff).value ^ ord(c)
         v = v ^ len(s)
         if v == -1:
             v = -2

@@ -47,8 +47,4 @@ class EdgeRc(ConfigParser):
             returns the named option as a list, splitting the original value
             by ','
         """
-        value = self.get(section, option)
-        if value:
-            return value.split(',')
-        else:
-            return None
+        return value.split(',') if (value := self.get(section, option)) else None

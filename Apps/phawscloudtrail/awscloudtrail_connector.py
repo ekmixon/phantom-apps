@@ -40,17 +40,13 @@ class AwsCloudtrailConnector(BaseConnector):
     def _handle_get_ec2_role(self):
 
         session = Session(region_name=self._region)
-        credentials = session.get_credentials()
-        return credentials
+        return session.get_credentials()
 
     def _create_client(self, action_result, param=None):
 
-        boto_config = None
-        if self._proxy:
-            boto_config = Config(proxies=self._proxy)
-
+        boto_config = Config(proxies=self._proxy) if self._proxy else None
         # Try getting and using temporary assume role credentials from parameters
-        temp_credentials = dict()
+        temp_credentials = {}
         if param and 'credentials' in param:
             try:
                 temp_credentials = ast.literal_eval(param['credentials'])
@@ -94,7 +90,12 @@ class AwsCloudtrailConnector(BaseConnector):
             boto_func = getattr(self._client, method)
             can_paginate = self._client.can_paginate(boto_func.__name__)
         except AttributeError:
-            return RetVal(action_result.set_status(phantom.APP_ERROR, "Invalid method: {}".format(method)))
+            return RetVal(
+                action_result.set_status(
+                    phantom.APP_ERROR, f"Invalid method: {method}"
+                )
+            )
+
 
         set_name = AWSCLOUDTRAIL_DICT_MAP.get(method)
         updated_list = []
@@ -109,26 +110,26 @@ class AwsCloudtrailConnector(BaseConnector):
                     updated_list.append(e)
             else:
                 resp_json = boto_func(**kwargs)
-                for i in resp_json.get(set_name):
-                    updated_list.append(i)
+                updated_list.extend(iter(resp_json.get(set_name)))
         except Exception as e:
             exception_message = e.args[0].strip()
             return RetVal(
                 action_result.set_status(phantom.APP_ERROR, "boto3 call to CloudTrail failed.", exception_message),
                 None)
 
-        if can_paginate:
-            next_token = None
-            if resp_json and resp_json.get('NextToken'):
-                next_token = resp_json.get('NextToken')
-
-            res_dict = {
-                "response_list": self._sanitize_data(updated_list),
-                "next_token": next_token
-            }
-            return phantom.APP_SUCCESS, res_dict
-        else:
+        if not can_paginate:
             return phantom.APP_SUCCESS, self._sanitize_data(updated_list)
+        next_token = (
+            resp_json.get('NextToken')
+            if resp_json and resp_json.get('NextToken')
+            else None
+        )
+
+        res_dict = {
+            "response_list": self._sanitize_data(updated_list),
+            "next_token": next_token
+        }
+        return phantom.APP_SUCCESS, res_dict
 
     def _process_json_response(self, r, action_result):
 
@@ -158,7 +159,7 @@ class AwsCloudtrailConnector(BaseConnector):
         :param action_result: Object of ActionResult class
         :param **kwargs: Dictionary of Input parameters
         """
-        list_items = list()
+        list_items = []
         next_token = None
 
         while True:
@@ -226,7 +227,7 @@ class AwsCloudtrailConnector(BaseConnector):
 
         # Add a dictionary that is made up of the most important values from data into the summary
         summary = action_result.update_summary({})
-        summary['message'] = "Received {} trails".format(action_result.get_data_size())
+        summary['message'] = f"Received {action_result.get_data_size()} trails"
 
         return action_result.set_status(phantom.APP_SUCCESS)
 
@@ -318,19 +319,16 @@ class AwsCloudtrailConnector(BaseConnector):
             return new_dict
 
         if isinstance(cur_obj, list):
-            new_list = []
-            for v in cur_obj:
-                new_list.append(self._sanitize_data(v))
-            return new_list
+            return [self._sanitize_data(v) for v in cur_obj]
 
         if isinstance(cur_obj, datetime):
             return cur_obj.strftime("%Y-%m-%d %H:%M:%S")
 
         if isinstance(cur_obj, bp.PageIterator):
-            new_dict = dict()
+            new_dict = {}
             try:
                 for page in cur_obj:
-                    new_dict.update(page)
+                    new_dict |= page
                 return new_dict
             except Exception as e:
                 return {'error': e}
@@ -370,10 +368,13 @@ class AwsCloudtrailConnector(BaseConnector):
         self._access_key = config.get('Access Key')
         self._secret_key = config.get('Secret Key')
 
-        if not (self._access_key and self._secret_key):
-            return self.set_status(phantom.APP_ERROR, AWSCLOUDTRAIL_BAD_ASSET_CONFIG_MSG)
-
-        return phantom.APP_SUCCESS
+        return (
+            phantom.APP_SUCCESS
+            if (self._access_key and self._secret_key)
+            else self.set_status(
+                phantom.APP_ERROR, AWSCLOUDTRAIL_BAD_ASSET_CONFIG_MSG
+            )
+        )
 
     def finalize(self):
 
@@ -409,26 +410,24 @@ if __name__ == '__main__':
 
     if (username and password):
         try:
-            login_url = AwsCloudtrailConnector._get_phantom_base_url() + '/login'
+            login_url = f'{AwsCloudtrailConnector._get_phantom_base_url()}/login'
 
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

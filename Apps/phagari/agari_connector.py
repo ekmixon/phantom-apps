@@ -73,9 +73,9 @@ class AgariConnector(BaseConnector):
 
         try:
             if error_code in ERR_CODE_MSG:
-                error_text = "Error Message: {}".format(error_msg)
+                error_text = f"Error Message: {error_msg}"
             else:
-                error_text = "Error Code: {}. Error Message: {}".format(error_code, error_msg)
+                error_text = f"Error Code: {error_code}. Error Message: {error_msg}"
         except:
             self.debug_print(PARSE_ERR_MSG)
             error_text = PARSE_ERR_MSG
@@ -121,9 +121,18 @@ class AgariConnector(BaseConnector):
         """
         if field:
             fields_list = [value.strip() for value in field.split(',') if value.strip()]
-            if not fields_list:
-                return action_result.set_status(phantom.APP_ERROR, AGARI_ERR_INVALID_FIELDS.format(field=key)), None
-            return phantom.APP_SUCCESS, ','.join(fields_list)
+            return (
+                (phantom.APP_SUCCESS, ','.join(fields_list))
+                if fields_list
+                else (
+                    action_result.set_status(
+                        phantom.APP_ERROR,
+                        AGARI_ERR_INVALID_FIELDS.format(field=key),
+                    ),
+                    None,
+                )
+            )
+
         return phantom.APP_SUCCESS, field
 
     def _remove_empty_values(self, params):
@@ -147,7 +156,7 @@ class AgariConnector(BaseConnector):
         :param max_results: maximum number of results to be fetched
         :return: status phantom.APP_ERROR/phantom.APP_SUCCESS, successfully fetched results or None in case of failure
         """
-        items_list = list()
+        items_list = []
 
         params['offset'] = offset
         params['limit'] = AGARI_DEFAULT_LIMIT
@@ -496,7 +505,7 @@ class AgariConnector(BaseConnector):
 
         if not error_text:
             error_text = "Empty response and no information received"
-        message = "Status Code: {}. Data from server:\n{}\n".format(status_code, error_text)
+        message = f"Status Code: {status_code}. Data from server:\n{error_text}\n"
 
         message = message.replace('{', '{{').replace('}', '}}')
         return RetVal(action_result.set_status(phantom.APP_ERROR, message), None)
@@ -528,11 +537,13 @@ class AgariConnector(BaseConnector):
         if resp_json.get('error') or resp_json.get('error_description'):
             error = resp_json.get('error', 'Unavailable')
             error_details = resp_json.get('error_description', 'Unavailable')
-            message = "Error from server. Status Code: {}. Error: {}. Error Details: {}".format(status_code, error, error_details)
+            message = f"Error from server. Status Code: {status_code}. Error: {error}. Error Details: {error_details}"
+
         else:
             # You should process the error returned in the json
             error_text = r.text.replace("{", "{{").replace("}", "}}")
-            message = "Error from server. Status Code: {}. Data from server: {}".format(status_code, error_text)
+            message = f"Error from server. Status Code: {status_code}. Data from server: {error_text}"
+
 
         return RetVal(action_result.set_status(phantom.APP_ERROR, message), None)
 
@@ -569,7 +580,8 @@ class AgariConnector(BaseConnector):
 
         # everything else is actually an error at this point
         error_text = r.text.replace('{', '{{').replace('}', '}}')
-        message = "Can't process response from server. Status Code: {} Data from server: {}".format(r.status_code, error_text)
+        message = f"Can't process response from server. Status Code: {r.status_code} Data from server: {error_text}"
+
 
         return RetVal(action_result.set_status(phantom.APP_ERROR, message), None)
 
@@ -648,9 +660,12 @@ class AgariConnector(BaseConnector):
             request_func = getattr(self._session, method)
         except AttributeError:
             return RetVal(
-                action_result.set_status(phantom.APP_ERROR, "Invalid method: {}".format(method)),
-                resp_json
+                action_result.set_status(
+                    phantom.APP_ERROR, f"Invalid method: {method}"
+                ),
+                resp_json,
             )
+
 
         try:
             r = request_func(url, verify=True, json=json, data=data, headers=headers, params=params)
@@ -678,7 +693,7 @@ class AgariConnector(BaseConnector):
         :return: status phantom.APP_ERROR/phantom.APP_SUCCESS(along with appropriate message),
         response obtained by making an API call
         """
-        url = "{}{}".format(AGARI_BASE_URL, endpoint)
+        url = f"{AGARI_BASE_URL}{endpoint}"
         if headers is None:
             headers = {}
 
@@ -699,7 +714,10 @@ class AgariConnector(BaseConnector):
         msg = action_result.get_message()
 
         if msg and ('403' in msg or '401' in msg):
-            self.debug_print("Refreshing Agari API and re-trying request to [{}] because API token was expired or invalid with error code [{}]".format(url, msg))
+            self.debug_print(
+                f"Refreshing Agari API and re-trying request to [{url}] because API token was expired or invalid with error code [{msg}]"
+            )
+
             ret_val = self._generate_access_token(action_result)
             if phantom.is_fail(ret_val):
                 return action_result.get_status(), None
@@ -735,7 +753,7 @@ class AgariConnector(BaseConnector):
 
         self._headers.update({'Authorization': AGARI_AUTHORIZATION_HEADER.format(token=self._access_token)})
 
-        url = "{}{}".format(AGARI_BASE_URL, AGARI_LIST_POLICY_EVENTS_ENDPOINT)
+        url = f"{AGARI_BASE_URL}{AGARI_LIST_POLICY_EVENTS_ENDPOINT}"
 
         param = {
             "limit": 1
@@ -827,7 +845,7 @@ class AgariConnector(BaseConnector):
         :param param: Dictionary of input parameters
         :return: status(phantom.APP_SUCCESS/phantom.APP_ERROR)
         """
-        self.save_progress("In action handler for: {}".format(self.get_action_identifier()))
+        self.save_progress(f"In action handler for: {self.get_action_identifier()}")
         action_result = self.add_action_result(ActionResult(dict(param)))
 
         message_id = param['id']
@@ -916,12 +934,15 @@ class AgariConnector(BaseConnector):
         :return: updated filter to apply
         """
         if not self._is_poll_now:
-            last_fetched_id = self._state.get(AGARI_LAST_INGESTED_POLICY_EVENT_ID)
-            if last_fetched_id:
-                if not filter_to_apply:
-                    filter_to_apply = 'id.gt({})'.format(last_fetched_id)
-                else:
-                    filter_to_apply = '{} and id.gt({})'.format(filter_to_apply, last_fetched_id)
+            if last_fetched_id := self._state.get(
+                AGARI_LAST_INGESTED_POLICY_EVENT_ID
+            ):
+                filter_to_apply = (
+                    f'{filter_to_apply} and id.gt({last_fetched_id})'
+                    if filter_to_apply
+                    else f'id.gt({last_fetched_id})'
+                )
+
         return filter_to_apply
 
     def _map_policy_enabled(self, policy_enabled):
@@ -949,14 +970,14 @@ class AgariConnector(BaseConnector):
         """
         # If cef not found, return empty dict
         if not cef:
-            return dict()
+            return {}
 
         # if cef_mapping not found, return original cef
         if not cef_mapping:
             return cef.copy()
 
         # Recursive call for parsing cef dict
-        newcef = dict()
+        newcef = {}
         for key, value in list(cef.items()):
             if isinstance(value, dict):
                 value = self._remap_cef(value, cef_mapping)
@@ -995,8 +1016,9 @@ class AgariConnector(BaseConnector):
         if phantom.is_fail(ret_val):
             action_result_message = action_result.get_message()
             if 'end_date' in action_result_message:
-                end_date_message = "The 'end_date' for the On Poll action is current UTC time ({}).".format(self._current_utc_time.strftime(AGARI_API_SUPPORT_DATE_FORMAT))
-                message = "{} {}".format(action_result_message, end_date_message)
+                end_date_message = f"The 'end_date' for the On Poll action is current UTC time ({self._current_utc_time.strftime(AGARI_API_SUPPORT_DATE_FORMAT)})."
+
+                message = f"{action_result_message} {end_date_message}"
                 return action_result.set_status(phantom.APP_ERROR, message), {}
             return action_result.get_status(), {}
 
@@ -1063,7 +1085,10 @@ class AgariConnector(BaseConnector):
             ret_val, policy_event = self._make_rest_call_helper(action_result, AGARI_GET_POLICY_EVENT_ENDPOINT.format(id=policy_event_id), headers=self._headers)
             if phantom.is_fail(ret_val):
                 error_msg = action_result.get_message()
-                self.debug_print("Failed to fetch policy event ID {}. {}".format(policy_event_id, error_msg))
+                self.debug_print(
+                    f"Failed to fetch policy event ID {policy_event_id}. {error_msg}"
+                )
+
                 self.debug_print(AGARI_ERR_SKIP_POLICY_EVENT.format(policy_event_id))
                 self.save_progress(AGARI_ERR_SKIP_POLICY_EVENT.format(policy_event_id))
                 return {}
@@ -1078,7 +1103,7 @@ class AgariConnector(BaseConnector):
             ret_val, message = self._make_rest_call_helper(action_result, AGARI_GET_MESSAGE_ENDPOINT.format(id=message_id), headers=self._headers, params=message_params)
             if phantom.is_fail(ret_val):
                 error_msg = action_result.get_message()
-                self.debug_print("Failed to fetch message ID {}. {}".format(message_id, error_msg))
+                self.debug_print(f"Failed to fetch message ID {message_id}. {error_msg}")
                 self.debug_print(AGARI_ERR_SKIP_POLICY_EVENT.format(policy_event_id))
                 self.save_progress(AGARI_ERR_SKIP_POLICY_EVENT.format(policy_event_id))
                 return {}
@@ -1086,14 +1111,17 @@ class AgariConnector(BaseConnector):
             policy_event_updated = alert_event.copy()
             policy_event_updated['conditions'] = policy_event.get('alert_event', {}).get('conditions')
 
-            data = {
+            return {
                 'policy_event': policy_event_updated,
-                'message': message.get('message', {})
+                'message': message.get('message', {}),
             }
-            return data
+
         except Exception as e:
             error_msg = self._get_error_message_from_exception(e)
-            self.error_print("Failed to fetch policy event ID {}. {}".format(policy_event_id, error_msg))
+            self.error_print(
+                f"Failed to fetch policy event ID {policy_event_id}. {error_msg}"
+            )
+
             self.error_print(AGARI_ERR_SKIP_POLICY_EVENT.format(policy_event_id))
             self.save_progress(AGARI_ERR_SKIP_POLICY_EVENT.format(policy_event_id))
             return {}
@@ -1179,7 +1207,7 @@ class AgariConnector(BaseConnector):
             message_trust_score = float(message_trust_score)
             if message_trust_score <= 1:
                 severity = 'High'
-            elif message_trust_score > 1 and message_trust_score <= 5:
+            elif message_trust_score <= 5:
                 severity = 'Medium'
             else:
                 severity = 'Low'
@@ -1198,14 +1226,11 @@ class AgariConnector(BaseConnector):
         policy_event_id = policy_event.get('id')
         policy_name = policy_event.get('alert_definition_name')
         created_at = policy_event.get('created_at')
-        # Add container data
-        container = {
-            "name": "{} - {}[{}]".format(created_at, policy_name, policy_event_id),
-            "source_data_identifier": "{} {}".format(policy_event_id, policy_name),
-            "severity": severity
+        return {
+            "name": f"{created_at} - {policy_name}[{policy_event_id}]",
+            "source_data_identifier": f"{policy_event_id} {policy_name}",
+            "severity": severity,
         }
-
-        return container
 
     def _get_message_artifact_data(self, message, cef_mapping, severity):
         """
@@ -1219,14 +1244,12 @@ class AgariConnector(BaseConnector):
         # Construct artifact
         message_id = message.get('id')
         cef = self._remap_cef(message, cef_mapping)
-        artifact = {
+        return {
             "source_data_identifier": message_id,
             "name": "Message Artifact",
             "cef": cef,
-            "severity": severity
+            "severity": severity,
         }
-
-        return artifact
 
     def _get_policy_event_artifact_data(self, policy_event):
         """
@@ -1237,14 +1260,12 @@ class AgariConnector(BaseConnector):
         """
         # Construct artifact
         policy_event_id = policy_event.get('id')
-        artifact = {
+        return {
             "source_data_identifier": policy_event_id,
             "name": "Policy Event Artifact",
             "cef": policy_event,
-            "severity": 'Low'
+            "severity": 'Low',
         }
-
-        return artifact
 
     def _save_results(self, action_result, results, update_state_after, cef_mapping, sort):
         """
@@ -1272,14 +1293,17 @@ class AgariConnector(BaseConnector):
 
             status, message, container_id = self.save_container(container)
             if phantom.is_fail(status):
-                self.debug_print("Error occurred while saving the container: ID {}: {}".format(container_id, message))
+                self.debug_print(
+                    f"Error occurred while saving the container: ID {container_id}: {message}"
+                )
+
                 continue
 
             policy_event_artifact['container_id'] = container_id
             message_artifact['container_id'] = container_id
             status, message, _ = self.save_artifacts([policy_event_artifact, message_artifact])
             if phantom.is_fail(status):
-                self.debug_print("Error occurred while saving the artifact: {}".format(message))
+                self.debug_print(f"Error occurred while saving the artifact: {message}")
                 continue
 
             # Update state if the required number of container are ingested as per 'update_state_after'
@@ -1292,20 +1316,24 @@ class AgariConnector(BaseConnector):
 
             count += 1
 
-            self.save_progress("Policy event ID ({}) is ingested in container ID ({})".format(policy_event_id, container_id))
-            self.debug_print("Policy event ID ({}) is ingested in container ID ({})".format(policy_event_id, container_id))
+            self.save_progress(
+                f"Policy event ID ({policy_event_id}) is ingested in container ID ({container_id})"
+            )
 
-        if not self._is_poll_now:
+            self.debug_print(
+                f"Policy event ID ({policy_event_id}) is ingested in container ID ({container_id})"
+            )
+
+
+        if not self._is_poll_now and results:
             # Index will be 0 for latest first as we are fetching the data in descending order
             index = 0 if sort == "latest_first" else -1
 
-            # Update state after polling cycle is complete
-            if results:
-                self._state[AGARI_LAST_INGESTED_POLICY_EVENT_DATE] = results[index].get('policy_event', {}).get('created_at')
-                self._state[AGARI_LAST_INGESTED_POLICY_EVENT_ID] = results[index].get('policy_event', {}).get('id')
-                self.save_state(self._state)
-                self.debug_print(AGARI_INGESTION_STATUS_UPDATED)
-                self.save_progress(AGARI_INGESTION_STATUS_UPDATED)
+            self._state[AGARI_LAST_INGESTED_POLICY_EVENT_DATE] = results[index].get('policy_event', {}).get('created_at')
+            self._state[AGARI_LAST_INGESTED_POLICY_EVENT_ID] = results[index].get('policy_event', {}).get('id')
+            self.save_state(self._state)
+            self.debug_print(AGARI_INGESTION_STATUS_UPDATED)
+            self.save_progress(AGARI_INGESTION_STATUS_UPDATED)
 
         return phantom.APP_SUCCESS
 
@@ -1376,7 +1404,7 @@ class AgariConnector(BaseConnector):
         action = self.get_action_identifier()
         ret_val = phantom.APP_SUCCESS
 
-        self.debug_print("action_id: {}".format(self.get_action_identifier()))
+        self.debug_print(f"action_id: {self.get_action_identifier()}")
 
         # Dictionary mapping each action with its corresponding actions
         action_mapping = {
@@ -1389,7 +1417,7 @@ class AgariConnector(BaseConnector):
             "on_poll": self._handle_on_poll,
         }
 
-        if action in action_mapping.keys():
+        if action in action_mapping:
             action_function = action_mapping[action]
             ret_val = action_function(param)
 
@@ -1484,26 +1512,24 @@ def main():
 
     if username and password:
         try:
-            login_url = AgariConnector._get_phantom_base_url() + '/login'
+            login_url = f'{AgariConnector._get_phantom_base_url()}/login'
 
             print("Accessing the Login page")
             r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']
 
-            data = dict()
-            data['username'] = username
-            data['password'] = password
-            data['csrfmiddlewaretoken'] = csrftoken
+            data = {
+                'username': username,
+                'password': password,
+                'csrfmiddlewaretoken': csrftoken,
+            }
 
-            headers = dict()
-            headers['Cookie'] = 'csrftoken=' + csrftoken
-            headers['Referer'] = login_url
-
+            headers = {'Cookie': f'csrftoken={csrftoken}', 'Referer': login_url}
             print("Logging into Platform to get the session id")
             r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platform. Error: " + str(e))
+            print(f"Unable to get session id from the platform. Error: {str(e)}")
             exit(1)
 
     with open(args.input_test_json) as f:

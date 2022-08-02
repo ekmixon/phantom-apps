@@ -16,7 +16,10 @@ from autofocus_consts import *
 import simplejson as json
 import requests
 import os
-os.sys.path.insert(0, '{}/pan-python/lib'.format(os.path.dirname(os.path.abspath(__file__))))  # noqa
+os.sys.path.insert(
+    0, f'{os.path.dirname(os.path.abspath(__file__))}/pan-python/lib'
+)
+
 import pan.afapi  # pylint: disable=E0611,E0401
 
 
@@ -79,13 +82,18 @@ class AutoFocusConnector(BaseConnector):
         return phantom.APP_SUCCESS
 
     def _construct_body(self, value, field, start, size, scope="global"):
-        body = {}
-        body['scope'] = scope
-        body['from'] = start
-        body['size'] = size
-        body['sort'] = {"create_date": {"order": "desc"}}
-        body['query'] = {'operator': 'all', 'children': [{'field': field, 'operator': 'contains', 'value': value}]}
-        return body
+        return {
+            'scope': scope,
+            'from': start,
+            'size': size,
+            'sort': {"create_date": {"order": "desc"}},
+            'query': {
+                'operator': 'all',
+                'children': [
+                    {'field': field, 'operator': 'contains', 'value': value}
+                ],
+            },
+        }
 
     def _samples_search_tag(self, body, action_result):
         """ Do a search specified by query and then create a list of tags """
@@ -109,11 +117,13 @@ class AutoFocusConnector(BaseConnector):
             if not self._validate_api_call(r, action_result):
                 # Something wrong is going on if it reaches here
                 continue
-            tag_data = {}
-            tag_data['description'] = r.json['tag']['description']
-            tag_data['tag_name'] = r.json['tag']['tag_name']
-            tag_data['public_tag_name'] = r.json['tag']['public_tag_name']
-            tag_data['count'] = r.json['tag']['count']
+            tag_data = {
+                'description': r.json['tag']['description'],
+                'tag_name': r.json['tag']['tag_name'],
+                'public_tag_name': r.json['tag']['public_tag_name'],
+                'count': r.json['tag']['count'],
+            }
+
             action_result.add_data(tag_data)
 
         action_result.update_summary({'total_tags_matched': action_result.get_data_size()})
@@ -137,7 +147,10 @@ class AutoFocusConnector(BaseConnector):
             self.save_progress("Test Connectivity failed")
             return self.set_status(phantom.APP_ERROR)
         j = r.json['bucket_info']
-        self.save_progress("{}/{} daily points remaining".format(j['daily_points_remaining'], j['daily_points']))
+        self.save_progress(
+            f"{j['daily_points_remaining']}/{j['daily_points']} daily points remaining"
+        )
+
         return self.set_status_save_progress(phantom.APP_SUCCESS, "Connectivity test passed")
 
     def _hunt_action(self, field, value_type, param):
